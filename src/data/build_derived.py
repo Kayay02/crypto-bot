@@ -17,14 +17,13 @@ import datetime as dt
 import hashlib
 import json
 import os
+import subprocess
 import sys
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-
-SCRIPT_VERSION = "1.0.0"
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RAW = os.path.join(ROOT, "data", "raw")
@@ -102,6 +101,31 @@ def utc_iso(ms):
         return None
     return dt.datetime.fromtimestamp(int(ms) / 1000, dt.timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ")
+
+
+def git_revision():
+    """Commit hash of the code that produced this build.
+
+    Suffixed '-dirty' when the working tree has uncommitted changes, so a
+    manifest can never claim provenance it cannot actually reproduce.
+    Returns 'unknown' if git is unavailable or this is not a repository.
+    """
+    try:
+        rev = subprocess.run(
+            ["git", "-C", ROOT, "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=10)
+        if rev.returncode != 0:
+            return "unknown"
+        head = rev.stdout.strip()
+        # --porcelain covers staged, unstaged and untracked changes.
+        st = subprocess.run(
+            ["git", "-C", ROOT, "status", "--porcelain"],
+            capture_output=True, text=True, timeout=10)
+        if st.returncode != 0:
+            return f"{head}-dirty"
+        return f"{head}-dirty" if st.stdout.strip() else head
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
 
 
 def sha256_file(path):
@@ -281,13 +305,14 @@ def write_parquet(df, schema, path):
 
 def main():
     run_ts = dt.datetime.now(dt.timezone.utc).isoformat()
+    rev = git_revision()
     log("=" * 78)
-    log(f"BUILD DERIVED LAYER  v{SCRIPT_VERSION}   {run_ts}")
+    log(f"BUILD DERIVED LAYER  {rev}   {run_ts}")
     log("=" * 78)
 
     manifest = {
         "script": "src/data/build_derived.py",
-        "script_version": SCRIPT_VERSION,
+        "git_commit": rev,
         "run_utc": run_ts,
         "start_ts_filter": START_TS,
         "start_utc_filter": utc_iso(START_TS),
