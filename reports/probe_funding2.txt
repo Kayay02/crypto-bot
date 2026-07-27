@@ -1,0 +1,36 @@
+BITGET FUNDING-RATE PROBE #2 (READ-ONLY — no data modified)
+generated: 2026-07-26T14:33:38.830095+00:00
+
+==============================================================================
+TEST 1 — WHERE DOES pageNo PAGINATION STOP? (BTCUSDT)
+==============================================================================
+  pageNo=2   HTTP 200 code 00000 recs 100  2026-05-21T00:00:00.000000Z .. 2026-06-23T00:00:00.000000Z
+  pageNo=3   HTTP 200 code 00000 recs 70  2026-04-27T16:00:00.000000Z .. 2026-05-20T16:00:00.000000Z
+  pageNo=4   HTTP 200 code 00000 recs 0  (EMPTY)
+  pageNo=5   HTTP 200 code 00000 recs 0  (EMPTY)
+  pageNo=10  HTTP 200 code 00000 recs 0  (EMPTY)
+  pageNo=20  HTTP 200 code 00000 recs 0  (EMPTY)
+  pageNo=30  HTTP 200 code 00000 recs 0  (EMPTY)
+
+  deepest pageNo returning data: 3
+  oldest date reached via pageNo: 2026-04-27T16:00:00.000000Z
+  can a pageNo walk reach 2022-01-01? False (oldest 2026-04-27T16:00:00.000000Z)
+
+==============================================================================
+TEST 2 — DOES THIS ENDPOINT ACCEPT A TIME RANGE?
+==============================================================================
+  request: startTime=1640995200000 (2022-01-01T00:00:00.000000Z), endTime=1643673600000 (2022-02-01T00:00:00.000000Z)
+  HTTP 200  code 00000  records 100
+  returned range: 2026-06-23T08:00:00.000000Z .. 2026-07-26T08:00:00.000000Z
+  => records are OUTSIDE the requested window (recent data). startTime/endTime are being IGNORED.
+
+==============================================================================
+TEST 3 — WAS FUNDING EVER LARGE? (BTCUSDT, deepest data retrieved)
+==============================================================================
+  pooled unique BTC records: 270  (2026-04-27T16:00:00.000000Z .. 2026-07-26T08:00:00.000000Z)
+  3a min=-0.00017900  max=0.00010000  mean=0.00002420  median=0.00002600
+     records with |rate| > 0.0001: 8 of 270
+  3b 0.0001 behaves as a NEUTRAL BASELINE — values regularly exceed it (8 records; max abs = 0.00017900).
+  3c no records predate 2025 in the retrieved data.
+
+Total API requests made: 8 (budget 12)

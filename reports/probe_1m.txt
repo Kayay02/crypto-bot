@@ -1,0 +1,37 @@
+BITGET 1m PROBE (READ-ONLY — no data modified)
+generated: 2026-07-26T13:02:59.292133+00:00
+
+==============================================================================
+TEST 1 — 1m RETENTION DEPTH (endTime = 2022-01-15T00:00:00Z)
+==============================================================================
+  BTCUSDT: HTTP 200 code 00000 rows 200  min 2022-01-14T20:40:00.000000Z  max 2022-01-14T23:59:00.000000Z
+  ETHUSDT: HTTP 200 code 00000 rows 200  min 2022-01-14T20:40:00.000000Z  max 2022-01-14T23:59:00.000000Z
+  SOLUSDT: HTTP 200 code 00000 rows 200  min 2022-01-14T20:40:00.000000Z  max 2022-01-14T23:59:00.000000Z
+
+==============================================================================
+TEST 2 — SPACING AND SHAPE (symbols that returned data)
+==============================================================================
+  BTCUSDT: limit=200 -> 200 rows; consecutive diff == 60000ms: True; field counts per row: [7]
+  ETHUSDT: limit=200 -> 200 rows; consecutive diff == 60000ms: True; field counts per row: [7]
+  SOLUSDT: limit=200 -> 200 rows; consecutive diff == 60000ms: True; field counts per row: [7]
+
+==============================================================================
+TEST 3 — ARE 1m OPENS SYNTHESIZED? (recent BTCUSDT 200-bar 1m)
+==============================================================================
+  window 2026-07-26T09:43:00.000000Z .. 2026-07-26T13:02:00.000000Z, 200 bars
+  open == previous close (string equality): 100.000%  (199/199)
+
+==============================================================================
+TEST 4 — DO 1m BARS RECONSTRUCT THE 15m BAR? (BTCUSDT)
+==============================================================================
+  reference 15m bar @ 2022-01-01T19:00:00.000000Z
+    15m  high=47625.0 low=47495.0 close=47513.5 base_vol=533.399
+  fetched 200 1m bars; segment inside the 15m window: 15 (expect 15)
+    segment range 2022-01-01T19:00:00.000000Z .. 2022-01-01T19:14:00.000000Z
+  reconstruction checks:
+    max(1m highs) = 47625.0   vs 15m high = 47625.0   match: True  (diff +0)
+    min(1m lows)  = 47495.0   vs 15m low  = 47495.0   match: True  (diff +0)
+    last 1m close = 47513.5   vs 15m close = 47513.5   match: True  (diff +0)
+    sum(1m vols)  = 533.399   vs 15m vol  = 533.399   match: True  (diff +0)
+
+Total API requests made: 5 (budget 10)

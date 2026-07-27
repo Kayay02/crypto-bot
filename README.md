@@ -1,0 +1,3 @@
+# crypto-bot
+
+An intraday crypto trading bot targeting Bitget USDT-M perpetual futures on the 15-minute timeframe for BTC/ETH/SOL. The project is currently at the data-acquisition design stage — no strategy code exists yet. To run the API probe (which characterizes the Bitget history-candles endpoint: anchoring, timestamp convention, limit, sort order, in-progress candle behavior, pagination overlap, and SOL history availability), install dependencies with `pip install -r requirements.txt` and run `python src/data/probe_bitget.py`. Raw responses are written immutably to `data/raw/probe/` and a human-readable report is printed to stdout.

@@ -1,0 +1,103 @@
+BITGET FUNDING-RATE PROBE (READ-ONLY — no data modified)
+generated: 2026-07-26T14:27:29.341333+00:00
+
+==============================================================================
+TEST 1 — RESPONSE SHAPE
+==============================================================================
+  HTTP 200  code 00000  records returned: 100
+  raw first 3 records (unmodified):
+[
+  {
+    "symbol": "BTCUSDT",
+    "fundingRate": "-0.00001",
+    "fundingTime": "1785052800000"
+  },
+  {
+    "symbol": "BTCUSDT",
+    "fundingRate": "-0.000002",
+    "fundingTime": "1785024000000"
+  },
+  {
+    "symbol": "BTCUSDT",
+    "fundingRate": "0.000023",
+    "fundingTime": "1784995200000"
+  }
+]
+  field names present and apparent meaning:
+    - symbol: trading pair  (sample='BTCUSDT')
+    - fundingRate: funding rate for the settlement (decimal fraction?)  (sample='-0.00001')
+    - fundingTime: settlement timestamp (ms epoch)  (sample='1785052800000')
+
+  pageSize=100 -> 100 records.
+  pageSize=200 -> HTTP 200 code 00000, records 100  (msg=success)
+  => pageSize=200 capped at 100 (200 not honored, no error).
+
+==============================================================================
+TEST 2 — TIMESTAMP SEMANTICS AND INTERVAL
+==============================================================================
+  2a 20 most recent funding settlement times (UTC):
+    2026-07-26T08:00:00.000000Z
+    2026-07-26T00:00:00.000000Z
+    2026-07-25T16:00:00.000000Z
+    2026-07-25T08:00:00.000000Z
+    2026-07-25T00:00:00.000000Z
+    2026-07-24T16:00:00.000000Z
+    2026-07-24T08:00:00.000000Z
+    2026-07-24T00:00:00.000000Z
+    2026-07-23T16:00:00.000000Z
+    2026-07-23T08:00:00.000000Z
+    2026-07-23T00:00:00.000000Z
+    2026-07-22T16:00:00.000000Z
+    2026-07-22T08:00:00.000000Z
+    2026-07-22T00:00:00.000000Z
+    2026-07-21T16:00:00.000000Z
+    2026-07-21T08:00:00.000000Z
+    2026-07-21T00:00:00.000000Z
+    2026-07-20T16:00:00.000000Z
+    2026-07-20T08:00:00.000000Z
+    2026-07-20T00:00:00.000000Z
+  2b consecutive gaps:
+    BTCUSDT page1: 100 recs, range 2026-06-23T08:00:00.000000Z .. 2026-07-26T08:00:00.000000Z
+      distinct gaps (ms -> count): {28800000: 99}
+      any gap != 28800000ms (8h): no
+  2c distinct times-of-day observed: ['00:00:00', '08:00:00', '16:00:00']
+      all settlements on 00:00/08:00/16:00 UTC exactly: True
+  2d newest funding ts = 2026-07-26T08:00:00.000000Z; now = 2026-07-26T14:27:30.019000Z
+      newest is in the PAST (delta -6.46 h from now).
+      CONCLUSION: timestamp is BACKWARD-looking (a settlement that occurred).
+
+==============================================================================
+TEST 3 — INTERVAL STABILITY ACROSS SYMBOLS AND TIME
+==============================================================================
+
+[BTCUSDT]
+    recent (pageNo=1): 100 recs, range 2026-06-23T08:00:00.000000Z .. 2026-07-26T08:00:00.000000Z
+      distinct gaps (ms -> count): {28800000: 99}
+      any gap != 28800000ms (8h): no
+    deep (pageNo=40): no records (code 00000, msg success)
+
+[ETHUSDT]
+    recent (pageNo=1): 100 recs, range 2026-06-23T08:00:00.000000Z .. 2026-07-26T08:00:00.000000Z
+      distinct gaps (ms -> count): {28800000: 99}
+      any gap != 28800000ms (8h): no
+    deep (pageNo=40): no records (code 00000, msg success)
+
+[SOLUSDT]
+    recent (pageNo=1): 100 recs, range 2026-06-23T08:00:00.000000Z .. 2026-07-26T08:00:00.000000Z
+      distinct gaps (ms -> count): {28800000: 99}
+      any gap != 28800000ms (8h): no
+    deep (pageNo=40): no records (code 00000, msg success)
+
+==============================================================================
+TEST 4 — SIGN CONVENTION AND MAGNITUDE
+==============================================================================
+  [BTCUSDT page1] n=100  min=-0.00011800  max=0.00010000  mean=0.00004225  median=0.00004650
+           positive=83  negative=17  zero=0
+  4b max abs rate = 0.00011800. Typical perp funding is ~0.01% = 0.0001 as a decimal fraction.
+      Evidence: magnitudes ~1e-4, far below 1.0 -> expressed as a DECIMAL FRACTION (0.0001 = 0.01%), NOT a percentage (a percentage would show ~0.01, or values near 1 for 1%).
+  [ETHUSDT page1] n=100  min=-0.00004300  max=0.00010000  mean=0.00003215  median=0.00002950
+           positive=85  negative=15  zero=0
+  [SOLUSDT page1] n=100  min=-0.00011400  max=0.00010000  mean=0.00003378  median=0.00003600
+           positive=77  negative=23  zero=0
+
+Total API requests made: 10 (budget 12)
