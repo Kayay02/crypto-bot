@@ -141,7 +141,7 @@ def test_fixture_8_unfundable_trade_is_refused():
         signals, {"ETHUSDT": df15}, {"ETHUSDT": all_min}, cfg,
         {"ETHUSDT": ConstTick(TICK)})
     assert len(trades) == 0
-    assert refused["funding"] == 1
+    assert refused["insufficient_margin"] == 1
 
 
 def test_concurrent_positions_respect_the_leverage_cap():
@@ -156,7 +156,7 @@ def test_concurrent_positions_respect_the_leverage_cap():
         signals, df15, mins, cfg, ticks)
     # Each position is ~630 notional, so two fit under 1300 and the third does not.
     assert len(trades) == 2
-    assert refused["funding"] == 1
+    assert refused["insufficient_margin"] == 1
     assert trades["notional"].sum() <= cfg.equity_usd * cfg.max_leverage
 
 

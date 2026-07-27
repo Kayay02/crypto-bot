@@ -28,7 +28,15 @@ FLOAT_COLS = ["entry_price", "stop_price", "target_price", "qty", "notional",
 
 
 def run(symbols=SYMBOLS, start_ts=None, end_ts=None, params=None, cfg=None,
-        variant="gated", derived=DERIVED, trace_signal_ts=None):
+        variant="gated", derived=DERIVED, trace_signal_ts=None,
+        mode="portfolio"):
+    """Run one evaluation mode.
+
+    In SIGNAL mode the caller should pass variant="ungated": the simulation is
+    run ONCE over the full ungated universe and the gated arm is obtained by
+    filtering the resulting table on rvol (see gated_arm), guaranteeing the two
+    arms are the identical universe by construction.
+    """
     params = params or sg.SignalParams()
     cfg = cfg or costs.CostConfig()
     ticks = contracts.load_cache()
@@ -53,17 +61,28 @@ def run(symbols=SYMBOLS, start_ts=None, end_ts=None, params=None, cfg=None,
 
     if not sigs:
         empty = pd.DataFrame()
-        return empty, {"open_position": 0, "cooldown": 0, "funding": 0,
-                       "no_1m_coverage": 0}, {}
+        return empty, {"open_position": 0, "cooldown": 0,
+                       "insufficient_margin": 0, "no_1m_coverage": 0}, {}
 
     allsig = pd.concat(sigs, ignore_index=True)
     trades, refused, traces = simulate.run_backtest(
         allsig, bars15, bars1m, cfg, ticks,
-        donchian_period=params.donchian, trace_signal_ts=trace_signal_ts)
+        donchian_period=params.donchian, trace_signal_ts=trace_signal_ts,
+        mode=mode)
     trades = simulate.attach_flag_overlap(
         trades, os.path.join(derived, "flags",
                              "reconstruction_divergence.parquet"))
     return trades, refused, traces
+
+
+def gated_arm(trades, rvol_min):
+    """The gated arm, obtained by FILTERING the ungated trade table.
+
+    Not a second simulation. Partitioning one table guarantees both arms are
+    the identical universe by construction, and lets the RVOL threshold be
+    swept later at zero additional simulation cost.
+    """
+    return trades[trades["rvol"] >= rvol_min].reset_index(drop=True)
 
 
 def canonical_bytes(trades, ndigits=10):
@@ -89,6 +108,8 @@ def main():
     ap.add_argument("--start", type=int, default=None, help="start ts (ms)")
     ap.add_argument("--end", type=int, default=None, help="end ts (ms)")
     ap.add_argument("--variant", choices=["gated", "ungated"], default="gated")
+    ap.add_argument("--mode", choices=["portfolio", "signal"],
+                    default="portfolio")
     ap.add_argument("--trace-signal-ts", type=int, default=None,
                     help="dump a full hand-checkable trace for this signal bar")
     ap.add_argument("--out", default=None, help="write trades CSV here")
@@ -98,7 +119,7 @@ def main():
 
     trades, refused, traces = run(
         symbols=a.symbols, start_ts=a.start, end_ts=a.end, variant=a.variant,
-        trace_signal_ts=a.trace_signal_ts)
+        trace_signal_ts=a.trace_signal_ts, mode=a.mode)
 
     if a.trace_signal_ts is not None:
         for ts, txt in traces.items():

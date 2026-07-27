@@ -96,16 +96,77 @@ frozen in `config/contracts_cache.json`. Two isolated SOL prints carry 4 decimal
 after the change; they are frozen as named exceptions so the grid check stays
 strict rather than being absorbed by a loosened tolerance.
 
-**Cooldown is direction-specific.** A stopped long blocks new longs until a new
-20-bar high; shorts stay available.
+**Cooldown is direction-specific, and the extreme rule is provably inert.**
+A stopped long blocks new longs until a new 20-bar high; shorts stay available.
+The 20-bar-extreme condition is non-binding for *this* strategy by construction:
+a long entry requires a close above the Donchian-20 upper band, which *is* a new
+20-bar high, so the condition that clears the cooldown is entailed by the entry
+condition it gates. It is retained deliberately — it is a locked decision and an
+inert rule costs nothing. `cooldown_bars` (default **0**, preserving prior
+behaviour exactly) adds an independent bar-count block that *can* bind: set it
+positive to block re-entry for N bars after a stop-out.
 
-**Time stop measures +1R by intrabar touch on 1m.** Consistent with how stop and
-target are detected. Decision on the close of the 16th bar, execution on the
-first 1m bar of T+17 — mirroring entry, so every decision rests on closed-bar
-information.
+**Two separate holding rules — the time stop is NOT unconditional.**
+`time_stop_bars` (16) applies only when net +1R has *not* been reached: decision
+on that bar's close, execution on the first 1m bar of the next, taker.
+`max_hold_bars` (48) is the cap for trades that *did* reach +1R and are running
+toward target. They are different rules and must never be conflated: sizing the
+1m walk buffer from the time stop is what previously made the buffer act as an
+unconditional exit, silently capping every trade at 16 bars.
+`max_walk_minutes` is *derived* from `max_hold_bars` and is not a parameter; if
+it is ever exhausted that is `exit_reason = "insufficient_data"`, a data
+condition counted separately from any trading decision. `exit_reason
+= "walk_end"` no longer exists.
+
+**Why 48 bars.** The mandate is an intraday bot, so an unbounded hold is out of
+scope. 48 bars is 12 hours, crossing one to two 8h funding settlements rather
+than three. Longer holds also inflate portfolio occupancy, which starves the
+strategy of trades — measured: raising the cap from 16 to 48 pushed
+`refused_open_position` up and cost 2 of 44 trades on the golden slice alone.
+It is a default to be swept later, not a discovered value.
+
+**+1R is measured NET of costs.** The time stop tests a price solved so that
+net P&L equals exactly +$20 after the entry taker fee and a taker exit — the
+same closed form as the target, for the same reason. A naive
+`entry ± stop_distance` level is reached while the trade has *not* actually made
+1R, so a trade that is still losing after costs would survive the time stop.
+Taker is used for the exit side because a trade continuing past the time stop
+exits by stop, target or max-hold, and taker is the conservative assumption.
+Detection remains an intrabar 1m touch.
 
 **Divergence flags are reported, never filtered.** `flagged_bar_overlap` is a
 column, not a filter. A test asserts the attach function contains no row-dropping.
 
 **Funding is absent entirely.** Not an input to any decision — the rate is
-unknowable at entry. It is a separate sensitivity run later.
+unknowable at entry. It is a separate sensitivity run later. Note the margin
+refusal counter is named `insufficient_margin`, deliberately *not* `funding`,
+so it cannot be confused with a funding rate once real funding code lands.
+
+**`max_leverage` (3.0) is an unmeasured placeholder**, not a probed exchange
+constraint. Bitget's tiered initial margin was never queried. It has never bound
+on real data at this setting, so it is untested beyond its fixtures.
+
+**`stop_unresolved_frac` (0.5) is an admitted arbitrary constant**, now config
+rather than hardcoded: the fraction of stop distance price must travel beyond
+the level within the trigger minute before the fill is flagged `unresolved`.
+
+## Evaluation modes
+
+**Signal mode** is the edge-test instrument. Every signal is simulated
+independently — no position limit, no cooldown, no margin cap, no interaction.
+Trades may overlap. Run it ONCE over the full ungated universe; the gated arm is
+obtained by *filtering* that trade table on `rvol >= threshold`
+(`run.gated_arm`), never by a second simulation. This guarantees both arms are
+the identical universe by construction, and lets the threshold be swept at zero
+simulation cost.
+
+This matters because portfolio mode cannot test the edge claim: ~30% of signals
+never become trades because the symbol is occupied, the ungated universe is
+larger so it would be censored harder, and *which* signals survive is decided by
+arrival order rather than by the gate. That is two differently-censored samples,
+and any difference between them is uninterpretable.
+
+**Portfolio mode** is the realism instrument — equity curve, drawdown,
+occupancy. Both modes share the same Layer B lifecycle code; only the active
+constraint set differs, and a test asserts a single isolated trade is
+byte-identical across the two.

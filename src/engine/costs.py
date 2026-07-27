@@ -32,9 +32,38 @@ class CostConfig:
     stop_min_pct: float = 0.010
     stop_max_pct: float = 0.035
     target_r_multiple: float = 2.0
-    # Funding check: refuse trades whose notional could not have been carried.
+
+    # --- holding-period rules -------------------------------------------
+    # Two DIFFERENT rules; conflating them makes the walk buffer act as an
+    # unconditional exit, which is exactly the B1 defect.
+    #   time_stop_bars: if net +1R has NOT been reached by this bar, exit.
+    #   max_hold_bars:  if it HAS, the trade runs to stop/target or this cap.
+    time_stop_bars: int = 16
+    max_hold_bars: int = 48
+
+    # Cooldown after a stop-out, in 15m bars. 0 preserves prior behaviour.
+    cooldown_bars: int = 0
+
+    # Fraction of stop distance travelled beyond the level within the trigger
+    # minute, past which the stop fill is flagged "unresolved". Admittedly
+    # arbitrary, hence configurable.
+    stop_unresolved_frac: float = 0.5
+
+    # Margin check: refuse trades whose notional could not have been carried.
+    # NOT a probed exchange constraint -- an unmeasured placeholder.
     equity_usd: float = 2000.0
     max_leverage: float = 3.0
+
+    def __post_init__(self):
+        if self.max_hold_bars <= self.time_stop_bars:
+            raise ValueError(
+                f"max_hold_bars ({self.max_hold_bars}) must exceed "
+                f"time_stop_bars ({self.time_stop_bars}); otherwise the "
+                f"max-hold cap would pre-empt the time stop")
+        if self.cooldown_bars < 0:
+            raise ValueError("cooldown_bars must be >= 0")
+        if not 0.0 < self.stop_unresolved_frac:
+            raise ValueError("stop_unresolved_frac must be positive")
 
     def haircut_bps(self, symbol):
         if symbol not in self.stop_haircut_bps:
@@ -81,27 +110,55 @@ def stop_price(entry, atr, direction, cfg, tick):
     return round_to_tick(raw, tick, "down" if direction == LONG else "up")
 
 
-def solve_target(entry, qty, direction, cfg, tick):
-    """Price at which net P&L equals +target_r_multiple * R after all costs.
+def solve_price_for_net(entry, qty, direction, cfg, tick, net_pnl,
+                        exit_fee_rate):
+    """Price at which net P&L equals `net_pnl` after entry taker + exit fee.
 
-    Long, with T the target and P the entry fill:
-        net = q*(T - P) - q*P*f_taker - q*T*f_maker  =  2R
-    Solving for T:
-        T = ( 2R/q + P*(1 + f_taker) ) / (1 - f_maker)
+    Long, with X the exit price and P the entry fill:
+        net = q*(X - P) - q*P*f_in - q*X*f_out
+    Solving for X:
+        X = ( net/q + P*(1 + f_in) ) / (1 - f_out)
+
+    Always rounds AWAY from the position, so a level is never claimed at a
+    price that would deliver less than `net_pnl`.
+    """
+    if qty <= 0:
+        raise ValueError("qty must be positive")
+    if direction == LONG:
+        raw = (net_pnl / qty + entry * (1 + cfg.taker_fee)) / (1 - exit_fee_rate)
+        return round_to_tick(raw, tick, "up")
+    raw = (entry * (1 - cfg.taker_fee) - net_pnl / qty) / (1 + exit_fee_rate)
+    return round_to_tick(raw, tick, "down")
+
+
+def solve_target(entry, qty, direction, cfg, tick):
+    """Take-profit price: net +target_r_multiple * R, exiting maker.
 
     "2 x stop distance" is NOT equivalent: it ignores that the winner pays two
     fee legs on a larger notional, so realised winners land short of 2R while
     losers still pay a full 1R.
     """
-    if qty <= 0:
-        raise ValueError("qty must be positive")
-    target_pnl = cfg.target_r_multiple * cfg.risk_usd
-    if direction == LONG:
-        raw = (target_pnl / qty + entry * (1 + cfg.taker_fee)) / (1 - cfg.maker_fee)
-        # Round away from entry: never claim a fill at a price that pays < 2R.
-        return round_to_tick(raw, tick, "up")
-    raw = (entry * (1 - cfg.taker_fee) - target_pnl / qty) / (1 + cfg.maker_fee)
-    return round_to_tick(raw, tick, "down")
+    return solve_price_for_net(
+        entry, qty, direction, cfg, tick,
+        net_pnl=cfg.target_r_multiple * cfg.risk_usd,
+        exit_fee_rate=cfg.maker_fee)
+
+
+def solve_r_level(entry, qty, direction, cfg, tick, r=1.0):
+    """Price at which net P&L equals +r * R, exiting TAKER.
+
+    This is the threshold the time stop tests, and it must be net of costs for
+    the same reason the target is: a naive entry +/- stop_distance level is
+    reached while the trade has NOT actually made 1R, so a losing-after-costs
+    trade would survive the time stop.
+
+    Taker is used because a trade continuing past the time stop will exit by
+    stop, target or max-hold; taker is the conservative assumption of those.
+    """
+    return solve_price_for_net(
+        entry, qty, direction, cfg, tick,
+        net_pnl=r * cfg.risk_usd,
+        exit_fee_rate=cfg.taker_fee)
 
 
 def position_size(entry, stop, direction, cfg, symbol):

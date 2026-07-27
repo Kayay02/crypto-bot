@@ -113,23 +113,27 @@ def test_fixture_5b_shallow_breach_is_normal_quality():
 
 
 def test_fixture_6_time_stop_when_1R_never_reached():
-    # 17 x 15m of drift that never touches +1R (103.00) or the stop (97.00).
-    bars = [ENTRY_BAR] + flat(simulate.MAX_1M_WALK - 1, price=100.0)
+    cfg = costs.CostConfig()
+    # Flat drift that never touches +1R net or the stop (97.00).
+    bars = [ENTRY_BAR] + flat(simulate.max_walk_minutes(cfg) - 1, price=100.0)
     t, _ = run(bars)
     assert t["exit_reason"] == "time_stop"
     assert t["reached_1r"] is False
-    # Decision at the close of the 16th bar, execution on the first minute of
-    # T+17 -- mirroring the entry convention.
-    assert t["exit_ts"] == SIG_TS + simulate.BAR_15M_MS * (simulate.TIME_STOP_BARS + 1)
-    assert t["bars_held"] == simulate.TIME_STOP_BARS
+    # Decision at the close of bar 16, execution on the first minute of bar 17
+    # -- mirroring the entry convention.
+    assert t["exit_ts"] == SIG_TS + simulate.BAR_15M_MS * (cfg.time_stop_bars + 1)
+    assert t["bars_held"] == cfg.time_stop_bars
 
 
 def test_fixture_6b_no_time_stop_once_1R_reached():
-    """+1R touched intrabar (the chosen convention) suppresses the time stop."""
-    bars = [ENTRY_BAR, (103.50, 99.9, 103.0)] + flat(simulate.MAX_1M_WALK - 2, price=101.0)
+    """+1R net touched intrabar suppresses the time stop; max_hold caps it."""
+    cfg = costs.CostConfig()
+    bars = ([ENTRY_BAR, (104.50, 99.9, 103.0)]
+            + flat(simulate.max_walk_minutes(cfg) - 2, price=101.0))
     t, _ = run(bars)
     assert t["reached_1r"] is True
     assert t["exit_reason"] != "time_stop"
+    assert t["exit_reason"] == "max_hold"
 
 
 def test_short_direction_is_symmetric():

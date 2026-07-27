@@ -14,15 +14,25 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from costs import (LONG, SHORT, CostConfig, entry_fill_price, position_size,
-                   r_multiple, round_to_tick, solve_target, stop_fill_price,
-                   stop_price, trade_pnl)
+                   r_multiple, round_to_tick, solve_r_level, solve_target,
+                   stop_fill_price, stop_price, trade_pnl)
 
 BAR_15M_MS = 900_000
 BAR_1M_MS = 60_000
 
-TIME_STOP_BARS = 16          # decide at the close of the 16th 15m bar after entry
-# Entry minute, then bars T+1..T+16, then the single T+17 execution minute.
-MAX_1M_WALK = TIME_STOP_BARS * 15 + 1
+def max_walk_minutes(cfg):
+    """1m bars to load per trade. DERIVED from max_hold_bars, never a rule.
+
+    Entry minute, then bars 1..max_hold_bars, then the single execution minute
+    of bar max_hold_bars+1. Sizing this buffer from the time stop is what made
+    the walk act as an unconditional exit (defect B1); it must always be large
+    enough that running out of buffer means running out of DATA.
+    """
+    return cfg.max_hold_bars * 15 + 2
+
+
+# Retained for tests that reason about the default buffer length.
+TIME_STOP_BARS = 16
 
 
 @dataclass
@@ -96,11 +106,15 @@ def simulate_trade(signal, bars_1m, cfg, tick, trace=None):
     # Trade-through requirement: touch is not a fill for a resting limit.
     fill_level = round_to_tick(
         target + tick if direction == LONG else target - tick, tick, "nearest")
-    r1_level = (entry + (entry - stop) if direction == LONG
+    # +1R NET of costs (B2), exiting taker. A naive entry +/- stop_distance
+    # level is reached while the trade has not actually made 1R.
+    r1_level = solve_r_level(entry, qty, direction, cfg, tick, r=1.0)
+    r1_gross = (entry + (entry - stop) if direction == LONG
                 else entry - (stop - entry))
     tr(f"  LEVELS  stop {_fmt(stop)} | target {_fmt(target)} "
-       f"| tp needs trade-through >= {_fmt(fill_level)} "
-       f"| +1R level {_fmt(r1_level)}")
+       f"| tp needs trade-through >= {_fmt(fill_level)}")
+    tr(f"          +1R net {_fmt(r1_level)} (gross would be "
+       f"{_fmt(r1_gross)}) -- time stop tests the NET level")
 
     # ---- walk the 1m path -------------------------------------------------
     exit_ts = exit_px = None
@@ -112,10 +126,14 @@ def simulate_trade(signal, bars_1m, cfg, tick, trace=None):
     mfe = mae = 0.0
     exit_fee_rate = cfg.taker_fee
 
-    walk = bars_1m[:MAX_1M_WALK]
-    time_stop_deadline = sig_ts + BAR_15M_MS * (TIME_STOP_BARS + 1)
-    tr(f"  WALK    {len(walk) - 1} 1m bars after the entry minute, "
-       f"time-stop execution at {time_stop_deadline}")
+    walk = bars_1m[:max_walk_minutes(cfg)]
+    time_stop_deadline = sig_ts + BAR_15M_MS * (cfg.time_stop_bars + 1)
+    max_hold_deadline = sig_ts + BAR_15M_MS * (cfg.max_hold_bars + 1)
+    tr(f"  WALK    {len(walk) - 1} 1m bars after the entry minute")
+    tr(f"          time-stop execution {time_stop_deadline} (bar "
+       f"{cfg.time_stop_bars}+1, only if +1R net NOT reached)")
+    tr(f"          max-hold execution  {max_hold_deadline} (bar "
+       f"{cfg.max_hold_bars}+1, cap once +1R net IS reached)")
 
     # Exit detection starts at the minute AFTER entry. The entry minute's own
     # high/low happened before the fill, so testing them would exit on price
@@ -160,7 +178,7 @@ def simulate_trade(signal, bars_1m, cfg, tick, trace=None):
             # minute, so the haircut is a guess. True gaps are undetectable
             # because 1m opens are synthetic.
             beyond = (stop - lo) if direction == LONG else (hi - stop)
-            if beyond > abs(entry - stop) * 0.5:
+            if beyond > abs(entry - stop) * cfg.stop_unresolved_frac:
                 stop_quality = "unresolved"
             tr(f"    [{i:3d}] ts={ts} h={_fmt(hi)} l={_fmt(lo)}  STOP "
                f"(observed) fill {_fmt(exit_px)} quality={stop_quality}")
@@ -179,25 +197,36 @@ def simulate_trade(signal, bars_1m, cfg, tick, trace=None):
             tp_touch_then = "continued"
         tr(f"    [{i:3d}] ts={ts} h={_fmt(hi)} l={_fmt(lo)}")
 
-        # ---- time stop ----------------------------------------------------
-        # Decision is taken on the CLOSE of the 16th 15m bar after entry; the
-        # exit executes on the first 1m bar of T+17, mirroring entry.
+        # ---- time stop: only when +1R NET was never reached ----------------
+        # Decision on the CLOSE of bar time_stop_bars; execution on the first
+        # 1m bar of the next 15m bar, mirroring the entry convention.
         if ts >= time_stop_deadline and not reached_1r:
             exit_reason, resolution = "time_stop", "observed"
             exit_px = round_to_tick(float(b["close"]), tick, "nearest")
             exit_ts = ts
-            tr(f"    [{i:3d}] ts={ts} TIME STOP: +1R ({_fmt(r1_level)}) never "
-               f"touched -> exit at 1m close {_fmt(exit_px)}")
+            tr(f"    [{i:3d}] ts={ts} TIME STOP: +1R net ({_fmt(r1_level)}) "
+               f"never touched -> exit at 1m close {_fmt(exit_px)}")
+            break
+
+        # ---- max hold: the cap for trades that DID reach +1R ---------------
+        if ts >= max_hold_deadline:
+            exit_reason, resolution = "max_hold", "observed"
+            exit_px = round_to_tick(float(b["close"]), tick, "nearest")
+            exit_ts = ts
+            tr(f"    [{i:3d}] ts={ts} MAX HOLD ({cfg.max_hold_bars} bars) "
+               f"-> exit at 1m close {_fmt(exit_px)}")
             break
 
     if exit_ts is None:
-        # Walk exhausted without stop/target and +1R was reached: close out at
-        # the last available minute so no trade is left dangling.
+        # The buffer is derived from max_hold_bars, so exhausting it means the
+        # DATA ran out (end of dataset or a 1m coverage hole), not that a
+        # trading rule fired. Counted separately; never a trading decision.
         last = walk[-1]
-        exit_reason, resolution = "walk_end", "observed"
+        exit_reason, resolution = "insufficient_data", "observed"
         exit_px = round_to_tick(float(last["close"]), tick, "nearest")
         exit_ts = int(last["ts"])
-        tr(f"  END     walk exhausted, exit at {_fmt(exit_px)} "
+        tr(f"  END     INSUFFICIENT DATA: only {len(walk)} 1m bars available, "
+           f"need {max_walk_minutes(cfg)}; exit at last close {_fmt(exit_px)} "
            f"(reached_1r={reached_1r})")
 
     gross, fees, net = trade_pnl(entry, exit_px, qty, direction,
@@ -301,16 +330,27 @@ def new_extreme_flags(df15, period):
 
 
 def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
-                 donchian_period=20, trace_signal_ts=None):
-    """Walk signals in time order, applying portfolio constraints.
+                 donchian_period=20, trace_signal_ts=None, mode="portfolio"):
+    """Walk signals in time order. `mode` selects which constraints apply.
 
-    Constraints, in the order they are checked:
+    PORTFOLIO mode (realism instrument -- equity curve, drawdown, occupancy):
       1. one open position per symbol, no pyramiding;
       2. cooldown -- after a stop-out, that symbol+direction is blocked until a
-         new `donchian_period`-bar extreme in that direction;
-      3. funding -- refuse a trade whose notional, added to positions already
+         new `donchian_period`-bar extreme in that direction, and for at least
+         cfg.cooldown_bars bars;
+      3. margin -- refuse a trade whose notional, added to positions already
          open at its entry, would exceed equity * max_leverage.
+
+    SIGNAL mode (edge-test instrument): every signal is simulated
+    independently. No position limit, no cooldown, no margin cap, no
+    interaction of any kind. Trades may overlap. This is the only mode in
+    which a gated-vs-ungated comparison is interpretable, because portfolio
+    censoring drops ~30% of signals by arrival order rather than by the gate.
+
+    Both modes share simulate_trade; only the constraint set differs.
     """
+    if mode not in ("portfolio", "signal"):
+        raise ValueError(f"unknown mode {mode!r}")
     import pandas as pd
 
     sig = signals.sort_values(
@@ -325,7 +365,7 @@ def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
     open_positions = []          # dicts with symbol, entry_ts, exit_ts, notional
     blocked = {}                 # (symbol, direction) -> ts of stop-out
     trades = []
-    refused = {"open_position": 0, "cooldown": 0, "funding": 0,
+    refused = {"open_position": 0, "cooldown": 0, "insufficient_margin": 0,
                "no_1m_coverage": 0}
     traces = {}
 
@@ -337,22 +377,29 @@ def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
 
         open_positions = [p for p in open_positions if p["exit_ts"] > entry_ts]
 
-        if any(p["symbol"] == sym for p in open_positions):
-            refused["open_position"] += 1
-            continue
-
-        key = (sym, direction)
-        if key in blocked:
-            ts_arr, nh, nl = extremes[sym]
-            flags = nh if direction == LONG else nl
-            window = (ts_arr > blocked[key]) & (ts_arr <= sig_ts)
-            if not bool(np.any(flags[window] & np.isfinite(flags[window]))):
-                refused["cooldown"] += 1
+        if mode == "portfolio":
+            if any(p["symbol"] == sym for p in open_positions):
+                refused["open_position"] += 1
                 continue
-            del blocked[key]
+
+            key = (sym, direction)
+            if key in blocked:
+                stop_ts = blocked[key]
+                # Two conditions, both must clear: a new N-bar extreme in that
+                # direction, and cfg.cooldown_bars elapsed since the stop-out.
+                ts_arr, nh, nl = extremes[sym]
+                flags = nh if direction == LONG else nl
+                window = (ts_arr > stop_ts) & (ts_arr <= sig_ts)
+                extreme_made = bool(np.any(flags[window]
+                                           & np.isfinite(flags[window])))
+                bars_elapsed = (sig_ts - stop_ts) // BAR_15M_MS
+                if not extreme_made or bars_elapsed < cfg.cooldown_bars:
+                    refused["cooldown"] += 1
+                    continue
+                del blocked[key]
 
         recs = bars1m_by_symbol[sym]
-        walk = slice_1m(recs, entry_ts, MAX_1M_WALK)
+        walk = slice_1m(recs, entry_ts, max_walk_minutes(cfg))
         if len(walk) == 0 or int(walk[0]["ts"]) != entry_ts:
             refused["no_1m_coverage"] += 1
             continue
@@ -371,24 +418,31 @@ def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
             refused["no_1m_coverage"] += 1
             continue
 
-        # Funding: could this notional have been carried alongside the rest?
-        concurrent = sum(p["notional"] for p in open_positions)
-        cap = cfg.equity_usd * cfg.max_leverage
-        if concurrent + t["notional"] > cap:
-            refused["funding"] += 1
-            if want_trace:
-                tr(f"  REFUSED funding: {_fmt(concurrent, 2)} + "
-                   f"{_fmt(t['notional'], 2)} > cap {_fmt(cap, 2)}")
-                traces[sig_ts] = tr.text()
-            continue
+        # Margin: could this notional have been carried alongside the rest?
+        # Named insufficient_margin, NOT funding -- funding rate is banned from
+        # trade logic and real funding code will sit beside this later.
+        if mode == "portfolio":
+            concurrent = sum(p["notional"] for p in open_positions)
+            cap = cfg.equity_usd * cfg.max_leverage
+            if concurrent + t["notional"] > cap:
+                refused["insufficient_margin"] += 1
+                if want_trace:
+                    tr(f"  REFUSED insufficient_margin: {_fmt(concurrent, 2)} "
+                       f"+ {_fmt(t['notional'], 2)} > cap {_fmt(cap, 2)}")
+                    traces[sig_ts] = tr.text()
+                continue
 
         t["variant"] = s.get("variant", "gated")
+        # rvol travels with the trade so the gated arm can be obtained by
+        # FILTERING this table rather than by a second simulation.
+        t["rvol"] = float(s["rvol"])
         trades.append(t)
-        open_positions.append({"symbol": sym, "entry_ts": t["entry_ts"],
-                               "exit_ts": t["exit_ts"],
-                               "notional": t["notional"]})
-        if t["exit_reason"] == "stop":
-            blocked[key] = t["exit_ts"]
+        if mode == "portfolio":
+            open_positions.append({"symbol": sym, "entry_ts": t["entry_ts"],
+                                   "exit_ts": t["exit_ts"],
+                                   "notional": t["notional"]})
+            if t["exit_reason"] == "stop":
+                blocked[(sym, direction)] = t["exit_ts"]
         if want_trace:
             traces[sig_ts] = tr.text()
 
@@ -397,7 +451,7 @@ def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
             "exit_price", "exit_reason", "gross_pnl", "fees_paid",
             "slippage_paid", "net_pnl", "r_multiple", "mfe", "mae",
             "bars_held", "variant", "resolution", "tp_touched_not_filled",
-            "tp_after_touch", "stop_fill_quality", "reached_1r"]
+            "tp_after_touch", "stop_fill_quality", "reached_1r", "rvol"]
     df = pd.DataFrame(trades, columns=cols) if trades else pd.DataFrame(
         columns=cols)
     return df, refused, traces
@@ -424,7 +478,7 @@ def attach_flag_overlap(trades, divergence_path):
 def summarize(trades, refused):
     """Provenance counters. These are deliverables, not diagnostics."""
     n = len(trades)
-    out = {
+    return {
         "trades": n,
         "resolved_by_observation": int((trades["resolution"] == "observed").sum()) if n else 0,
         "decided_by_assumption": int((trades["resolution"] == "assumed").sum()) if n else 0,
@@ -433,7 +487,65 @@ def summarize(trades, refused):
         "flagged_bar_overlap": int(trades["flagged_bar_overlap"].sum()) if n and "flagged_bar_overlap" in trades else 0,
         "refused_open_position": refused["open_position"],
         "refused_cooldown": refused["cooldown"],
-        "refused_funding": refused["funding"],
+        "refused_insufficient_margin": refused["insufficient_margin"],
         "refused_no_1m_coverage": refused["no_1m_coverage"],
     }
+
+
+EXIT_REASONS = ["target", "stop", "time_stop", "max_hold", "insufficient_data"]
+
+
+def exit_reason_distribution(trades):
+    """Counts and percentages per exit reason. Report-only."""
+    n = len(trades)
+    out = {}
+    for r in EXIT_REASONS:
+        c = int((trades["exit_reason"] == r).sum()) if n else 0
+        out[r] = (c, (100.0 * c / n) if n else 0.0)
+    unknown = set(trades["exit_reason"]) - set(EXIT_REASONS) if n else set()
+    if unknown:
+        raise AssertionError(f"unexpected exit_reason values: {unknown}")
+    return out
+
+
+def stop_band_binding(trades, cfg):
+    """How often the ATR stop is clamped by the 1.0% floor or 3.5% cap.
+
+    If the floor binds most of the time, the 'volatility-adaptive' stop is
+    effectively a fixed percentage stop, which changes what the strategy is.
+    """
+    n = len(trades)
+    if n == 0:
+        return {"floor": (0, 0.0), "cap": (0, 0.0), "atr": (0, 0.0)}
+    entry = trades["entry_price"].to_numpy()
+    stop = trades["stop_price"].to_numpy()
+    pct = np.abs(entry - stop) / entry
+    # Compare against the band edges with a tick's worth of tolerance.
+    tol = 1e-4
+    floor = int(np.sum(pct <= cfg.stop_min_pct + tol))
+    cap = int(np.sum(pct >= cfg.stop_max_pct - tol))
+    atr = n - floor - cap
+    return {"floor": (floor, 100.0 * floor / n),
+            "cap": (cap, 100.0 * cap / n),
+            "atr": (atr, 100.0 * atr / n)}
+
+
+def holding_time_distribution(trades):
+    """bars_held summary overall and per exit reason. Report-only."""
+    n = len(trades)
+    if n == 0:
+        return {}
+    out = {}
+    for r in ["ALL"] + EXIT_REASONS:
+        sub = trades if r == "ALL" else trades[trades["exit_reason"] == r]
+        if len(sub) == 0:
+            out[r] = None
+            continue
+        b = sub["bars_held"].to_numpy()
+        out[r] = {
+            "n": int(len(b)),
+            "min": int(b.min()), "median": float(np.median(b)),
+            "mean": float(b.mean()), "max": int(b.max()),
+            "p90": float(np.percentile(b, 90)),
+        }
     return out
