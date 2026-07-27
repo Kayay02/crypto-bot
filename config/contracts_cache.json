@@ -1,0 +1,38 @@
+{
+  "note": "tick = priceEndStep * 10**-pricePlace; historical segments derived empirically from derived layer",
+  "product_type": "USDT-FUTURES",
+  "source": "https://api.bitget.com/api/v2/mix/market/contracts",
+  "symbols": {
+    "BTCUSDT": {
+      "segments": [
+        [
+          0,
+          0.1
+        ]
+      ],
+      "symbol": "BTCUSDT"
+    },
+    "ETHUSDT": {
+      "segments": [
+        [
+          0,
+          0.01
+        ]
+      ],
+      "symbol": "ETHUSDT"
+    },
+    "SOLUSDT": {
+      "segments": [
+        [
+          0,
+          0.0001
+        ],
+        [
+          1723608300000,
+          0.001
+        ]
+      ],
+      "symbol": "SOLUSDT"
+    }
+  }
+}
