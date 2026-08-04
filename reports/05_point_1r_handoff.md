@@ -7,20 +7,29 @@ Documentation-only task. Three files created, nothing else touched.
 ```
 docs/handoff/05_point_1r.md            360 lines
 docs/prompts/05_point_1r_handoff.md    199 lines
-reports/05_point_1r_handoff.md         (this file)
+reports/05_point_1r_handoff.md          66 lines
 ```
 
 ## Commit
 
-`COMMIT_HASH_PLACEHOLDER`
+`0da9d11c4d48e8c53b361f9c0a364bc01ce92610`
 
 Message: `docs: Point 1R handoff — strategy amendment pass (1R.1-1R.5)`
 
 ## git status after commit
 
+`git status --short` returns no output; `git status --porcelain | wc -l` returns 0. Working tree clean — the three new files were the only changes, and no existing tracked file was modified.
+
+Commit contents:
+
 ```
-GIT_STATUS_PLACEHOLDER
+docs/handoff/05_point_1r.md         | 360 ++++
+docs/prompts/05_point_1r_handoff.md | 199 ++++
+reports/05_point_1r_handoff.md      |  66 ++
+3 files changed, 625 insertions(+)
 ```
+
+A commit cannot contain its own hash, so this report was written with placeholders, committed as `0da9d11` above, and the hash/status then filled in by a follow-up commit touching only this report file. `0da9d11` is the handoff commit.
 
 ## Section headings in docs/handoff/05_point_1r.md
 
