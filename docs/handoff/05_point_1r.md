@@ -32,7 +32,7 @@ Time-stop exits were 26.5% (2022) and 43.3% (2023); target exits 21.3% / 14.9%. 
 
 ---
 
-## 3. 1R.1 — Stop Geometry
+## 3. 1R.1 — Stop Geometry (seven amendments, A1–A7, plus the Guard Rail Principle as a separately stated binding rule)
 
 **A1 — The stop's job is declared.**
 The stop's job is **noise survival**, volatility-scaled. `stop_atr_mult` is a first-class parameter to be calibrated at 15m, not inherited. The value 1.5 is **void as a default** — it is an unset placeholder with no privileged status in any sweep. The stop does not measure invalidation, cost or leverage.
@@ -40,12 +40,14 @@ The stop's job is **noise survival**, volatility-scaled. `stop_atr_mult` is a fi
 **A2 — `stop_min_pct` becomes DERIVED, not chosen.**
 
 ```
-stop_min_pct = max( N_cost * c_roundtrip , R / (E * L_max) )
+stop_min_pct = max( N_cost * c_roundtrip , risk_usd / (E * L_max) )
 ```
 
 - `c_roundtrip` — round-trip cost on the stop path (taker in, taker out = 0.12% before slippage, plus the engine's slippage haircut both sides).
 - `N_cost` — cost-dominance ratio, proposed at 6 (costs may consume at most ~1/6 of the risk distance). This is the one chosen number remaining.
-- Leverage term = $20 / ($2,000 * 3.0) = 0.333%.
+- `risk_usd` — fixed dollar risk per trade, $20 (see Section 13, A3). `R` is reserved exclusively for the risk multiple.
+- `E` — account equity. `L_max` — maximum leverage, 3.0.
+- Leverage term = `risk_usd / (E * L_max)` = $20 / ($2,000 * 3.0) = 0.333%.
 
 The cost term dominates the leverage term by roughly 3x, so the floor is fundamentally a **cost guard rail**. The leverage term stays in the formula so that any downward revision of `N_cost` does not silently make it load-bearing.
 
@@ -60,7 +62,7 @@ No per-symbol parameters. The BTC-vs-SOL divergence is an artifact of the floor 
 Stop anchored to breakout structure (breakout-bar low, or the crossed Donchian level, minus a buffer), variable-width, sized accordingly. Not baseline. Must not be silently promoted.
 
 **A5 — The cap is re-derived as a target-plausibility and exchange-minimum guard rail.**
-It is **not** loss limitation — with fixed $20 risk a wider stop means a smaller position, so dollar risk is constant by construction. Its jobs are:
+It is **not** loss limitation — with `risk_usd` fixed at $20 a wider stop means a smaller position, so dollar risk is constant by construction. Its jobs are:
 1. **Target plausibility** — at some stop width a 2R target stops being a thing that happens within the hold horizon.
 2. **Exchange minimum** — rejecting positions that fall below Bitget's minimum order quantity, explicitly rather than by silent rounding.
 
@@ -85,7 +87,7 @@ This principle killed a proposed volatility-relative floor in 1R.1 and killed `r
 
 ---
 
-## 4. 1R.2 — Volume Gate
+## 4. 1R.2 — Volume Gate (B0 contamination ledger update, plus five amendments, B1–B5)
 
 **B0 — Contamination ledger updated.**
 Add: "Diurnal volume profile (volume levels by time-of-day, not returns) was observed across the full 2022–2026 window during Point 2. All 1R.2 design justification is restricted to 2022-23. The holdout's diurnal profile is confirming evidence at Point 4, never motivating evidence in 1R."
@@ -172,8 +174,10 @@ The previous values 16 and 48 are **VOID**. Only `tau` remains sweepable, over a
 
 **D4 — The pace factor `phi` is made explicit.**
 
+*Naming identity:* what earlier drafts called `checkpoint_bars` and what D3 calls `time_stop_bars` are the **same quantity under two names**. `time_stop_bars` is the canonical name and is used throughout.
+
 ```
-phi = (threshold_R / target_R) / (checkpoint_bars / max_hold_bars)
+phi = (threshold_R / target_R) / (time_stop_bars / max_hold_bars)
 ```
 
 The original geometry gave `phi = (1/2) / (16/48) = 1.5` — demanding 50% of the price journey in 33% of the time budget. Nobody chose this; it fell out of two unrelated placeholders.
@@ -208,7 +212,7 @@ A 40-bar hold is ~10 hours and crosses at least one funding settlement. Point 2 
 
 ---
 
-## 6. 1R.4 — The Edge Claim
+## 6. 1R.4 — The Edge Claim (defect statement, reconciliation, decomposition and structural prediction, plus six amendments, E1–E6)
 
 **The defect.** "Break-even at a clean 1:2 after costs ~36% win rate" is true only conditional on every trade resolving at target or stop. That condition holds for 36.2% (2022) and 29.8% (2023) of the population. The framing described a minority subpopulation.
 
@@ -283,7 +287,7 @@ All values previously described as placeholders **remain placeholders unless der
 |---|---|---|
 | Timeframe | 15m, Bitget USDT-M perps | FIXED |
 | Universe | BTC / ETH / SOL | FIXED |
-| Capital / risk | ~$2,000 capital, $20 risk per trade after costs | FIXED |
+| Capital / risk | ~$2,000 capital; `risk_usd` = $20 (FIXED) per trade after costs. Percent-of-equity sizing deferred to Point 7 as a live-deployment decision. | FIXED |
 | Trend filter | EMA20 / EMA50 | FIXED |
 | Trigger | Donchian-20 breakout on a closed 15m bar; market order next bar (fill = 1m close of first minute of bar T+1) | FIXED |
 | `baseline_days` (RVOL slot baseline) | trailing completed prior days, median per slot | UNSET — TO BE CALIBRATED |
@@ -294,7 +298,7 @@ All values previously described as placeholders **remain placeholders unless der
 | `rsi_upper` | removed from baseline | REMOVED |
 | `rsi_period` | 14 | FIXED |
 | `stop_atr_mult` | multiplier on ATR(14) | UNSET — TO BE CALIBRATED |
-| `stop_min_pct` | `max(N_cost * c_roundtrip, R / (E * L_max))` | DERIVED |
+| `stop_min_pct` | `max(N_cost * c_roundtrip, risk_usd / (E * L_max))` | DERIVED |
 | `N_cost` | proposed 6 | UNSET — TO BE CALIBRATED |
 | `stop_max_pct` | target-plausibility + exchange-minimum guard rail | UNSET — TO BE CALIBRATED |
 | Target | +2R, solved net of costs | FIXED |
@@ -306,7 +310,7 @@ All values previously described as placeholders **remain placeholders unless der
 | Cooldown | removed (logical no-op) | REMOVED |
 | Position rule | one position per symbol, no pyramiding (portfolio mode only) | FIXED |
 
-Narrative form: 15m Bitget USDT-M perps on BTC/ETH/SOL, ~$2,000 capital, $20 risk per trade after costs. Trend filter EMA20/EMA50. Trigger: Donchian-20 breakout on a closed 15m bar, market order next bar. Gate: session-normalised RVOL (quote-denominated, median slot baseline over `baseline_days` trailing completed days) AND `vwap_position`, both binary, conjunctive. Momentum condition: `rsi_lower` only (`rsi_period` fixed 14); `rsi_upper` removed. Stop: `stop_atr_mult * ATR(14)`, floored at derived `stop_min_pct`, capped at `stop_max_pct`. Target: +2R, solved net of costs. Time stop: state check at bar `tau * donchian_period`; exit if below the phi-derived threshold. Hard exit at `2 * donchian_period`. Cooldown removed. One position per symbol, no pyramiding.
+Narrative form: 15m Bitget USDT-M perps on BTC/ETH/SOL, ~$2,000 capital, `risk_usd` fixed at $20 per trade after costs (percent-of-equity sizing deferred to Point 7). Trend filter EMA20/EMA50. Trigger: Donchian-20 breakout on a closed 15m bar, market order next bar. Gate: session-normalised RVOL (quote-denominated, median slot baseline over `baseline_days` trailing completed days) AND `vwap_position`, both binary, conjunctive. Momentum condition: `rsi_lower` only (`rsi_period` fixed 14); `rsi_upper` removed. Stop: `stop_atr_mult * ATR(14)`, floored at derived `stop_min_pct`, capped at `stop_max_pct`. Target: +2R, solved net of costs. Time stop: state check at bar `tau * donchian_period`; exit if below the phi-derived threshold. Hard exit at `2 * donchian_period`. Cooldown removed. One position per symbol, no pyramiding.
 
 **Parameter surface count:** reduced from roughly 15 to roughly 13, with `rsi_lower` as a live drop candidate.
 
@@ -338,7 +342,7 @@ Not baseline. Must not be silently promoted.
 **Also unchanged:**
 - The performance firewall, until it is deliberately lifted at the start of Point 4, after the validation design is pre-registered.
 - Every Point 2 data decision and every Point 3 engine semantic.
-- 15m timeframe, Bitget, BTC/ETH/SOL, $2,000, 1% risk after costs.
+- 15m timeframe, Bitget, BTC/ETH/SOL, $2,000 account, `risk_usd` = $20 (FIXED) per trade after costs. This is the authoritative risk denomination for all backtesting and validation; percent-of-equity sizing is deferred to Point 7 as a live-deployment decision (Section 13, A3).
 - 2025-26 remains an untouched out-of-sample holdout.
 
 ---
@@ -358,3 +362,133 @@ Not baseline. Must not be silently promoted.
 **Point 4 — validation design.** Regime labelling from empirical measurement (never narrative memory), walk-forward folds, out-of-sample holdout, parameter-sensitivity plateaus.
 
 The performance firewall lifts at the **start of Point 4**, only after the validation design is written down and pre-registered. First act after lifting: measure sigma per E6 and recompute the power table.
+
+---
+
+## 13. Errata and Numeric Kill Thresholds (resolved review flags)
+
+The Point 1R handoff report flagged eight internal inconsistencies without resolving them, per its instructions. All eight have now been reviewed and are resolved here. This section records the resolutions; it changes no decision content beyond the eight flags.
+
+**These thresholds were fixed BEFORE the structural measurement pass was run.** The point is procedural: a measurement cannot be interpreted against a threshold chosen after seeing it. Every cut below is a pre-commitment.
+
+---
+
+### A1 — Numeric kill thresholds for the structural checks
+
+The 1R.2 and 1R.5 pre-checks were specified qualitatively ("very high", "clusters tightly", "rejects almost nothing"). Deciding those cuts after seeing the measurements would be threshold-shopping. The cuts are therefore fixed now.
+
+**B3 validity check.**
+`bar_vwap = quote_volume / volume` must land within `[low − 1 tick, high + 1 tick]` on **at least 99.99% of bars**, per symbol per year. The one-tick tolerance allows floating-point and tick-rounding noise and nothing else.
+
+- FAIL ⇒ Bitget's `quote_volume` is unreliable ⇒ **both B3 (`vwap_position`) and B2 (quote denomination) die.**
+
+**B3 non-redundancy check.**
+Pearson correlation between `vwap_position` and `close_position = (close − low) / (high − low)`, measured on **breakout bars only**, per symbol per year:
+
+| `|rho|` | Verdict |
+|---|---|
+| `>= 0.90` | **KILL.** 81% shared variance; `vwap_position` is a relabelled price-action term. |
+| `0.70 <= |rho| < 0.90` | **AMBER.** Proceed, but the redundancy is recorded and reported in every result that uses the gate. |
+| `< 0.70` | **PASS.** |
+
+**B3 dispersion check.**
+On breakout bars, **both** must hold:
+
+- interquartile range of `vwap_position` **>= 0.15**, and
+- there must exist a threshold rejecting between **25% and 75%** of breakout bars.
+
+FAIL ⇒ nothing to discriminate with ⇒ B3 dies.
+
+**F2 `rsi_lower` check.**
+Rejection rate on breakout bars, per symbol per year:
+
+- rejects **< 5%** → decorative; **drops now**, before the build, without consuming an attribution arm.
+- rejects **>= 5%** → retained as a live arm under the D5 single-pass drop rule.
+
+*Rationale:* 5% of the 200-trade in-sample minimum is 10 trades, below any power to detect anything.
+
+**B5 selectivity ratio.**
+(pass rate on breakout bars) ÷ (pass rate on all bars), per symbol per year:
+
+- ratio **>= 2.0** → RVOL is genuinely selective, but its selectivity was **pre-spent by conditioning** on the breakout.
+- ratio **<= 1.3** → RVOL >= 1.5 was **never selective**; the gate as originally specified was decoration.
+- between 1.3 and 2.0 → inconclusive; the gate stays pending the B4 four-arm attribution.
+
+**B2 denomination decision rule.**
+The more stable denomination must win in **at least 2 of 3 symbols across both years**. Otherwise default to `quote_volume`. This mirrors the pre-committed two-of-three rule rather than inventing new arbitration.
+
+---
+
+### A2 — B4 sample-size arithmetic corrected
+
+The figure recorded in B4, `~66% x ~50% = ~33%`, used an invented 50% pass rate for `vwap_position`, which has no threshold set and therefore no measured pass rate. It is replaced by the design range:
+
+```
+RVOL ~66%  x  vwap_position 25–75%   =>  joint survival band of 16%–50% of breakout bars
+```
+
+The `25–75%` term is the B3 dispersion requirement above, so the band is a design constraint rather than a measurement.
+
+The pre-committed resolution order if evidence minimums cannot be met is **unchanged**: loosen thresholds → extend the in-sample window → drop to a single condition. **The evidence minimum (200 IS / 50 OOS / 30 per direction, per symbol) is not on that list and does not move.**
+
+---
+
+### A3 — Risk denomination: fixed dollar risk is authoritative
+
+Sections 8 and 10 stated "$20 risk per trade" and "1% risk after costs". These agree at exactly $2,000 equity and diverge as equity moves.
+
+**Resolution: `risk_usd` is FIXED at $20 for all backtesting and validation. Percent-of-equity sizing is deferred to Point 7 as a live-deployment decision.**
+
+*Rationale — this is a measurement argument, not a risk-appetite one.* If R floats with equity, an early winner enlarges every subsequent R, and a trade's contribution to expectancy depends on *when in the sequence it occurred*. Expectancy per trade would stop being a property of the strategy and become a property of the ordering, corrupting the metric 1R.4 was written to define. Fixed R keeps every trade commensurable. Compounding is a deployment question and belongs where it can be tested against a real equity curve.
+
+Applied in place in Sections 8 and 10.
+
+---
+
+### A4 — Symbol collision: `R` resolved
+
+`R` denoted both dollar risk (in A2's floor formula) and the risk multiple (in "+2R", "0.05R"). The notation is fixed throughout the document:
+
+- **`risk_usd`** — the fixed dollar risk per trade ($20).
+- **`R`** — reserved exclusively for the risk multiple.
+
+A2's derived floor formula is restated as:
+
+```
+stop_min_pct = max( N_cost * c_roundtrip , risk_usd / (E * L_max) )
+```
+
+with symbols declared explicitly:
+
+- `c_roundtrip` — round-trip cost on the stop path (taker in, taker out = 0.12% before slippage, plus the engine's slippage haircut both sides).
+- `N_cost` — cost-dominance ratio, proposed at 6.
+- `E` — account equity.
+- `L_max` — maximum leverage, 3.0.
+
+The leverage term evaluates to `$20 / ($2,000 × 3.0)` = **0.333%**.
+
+---
+
+### A5 — The Guard Rail Principle is BINDING, not rationale
+
+It has already been applied to kill two proposals (a volatility-relative floor in 1R.1, and `rsi_upper` in 1R.5), so it functions as a rule regardless of how it was labelled. Its status is recorded explicitly:
+
+> **Guard Rail Principle (binding).** A guard rail must be denominated in a different unit from the mechanism it guards. Percent-of-price guarding an ATR-scaled stop is coherent. ATR guarding ATR is a logical no-op — it is either always inert or always binding, never conditionally binding. Any future guard rail proposal must state its denomination and that of the mechanism it guards.
+
+---
+
+### A6 — Naming identity stated
+
+`checkpoint_bars` in the D4 pace-factor formula and `time_stop_bars` in D3 are the **same quantity under two names**. The identity is stated explicitly, and **`time_stop_bars` is the canonical name**. Applied in place in D4.
+
+---
+
+### A7 — Amendment counts corrected
+
+Section headings stated amendment counts that did not match their contents. The headings are corrected to match what is enumerated:
+
+- **1R.1** — **seven** amendments (A1–A7), plus the Guard Rail Principle stated separately as a binding rule.
+- **1R.2** — B0 (contamination ledger update) plus **five** amendments (B1–B5).
+- **1R.4** — a defect statement, reconciliation, decomposition and structural prediction, plus **six** amendments (E1–E6).
+
+No decision content changes; labels only.
