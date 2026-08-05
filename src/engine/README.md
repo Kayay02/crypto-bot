@@ -239,8 +239,36 @@ unrelated placeholders.
 
 `max_walk_minutes` is *derived* from `max_hold_bars` and is not a parameter; if
 it is ever exhausted that is `exit_reason = "insufficient_data"`, a data
-condition counted separately from any trading decision. `exit_reason
-= "walk_end"` no longer exists.
+condition counted separately from any trading decision — never a trading rule.
+`exit_reason = "walk_end"` no longer exists.
+
+**Every exit decides on a closed bar and fills on the next one.** Both the time
+stop and max hold evaluate at the **close of a 15m bar** and execute at the
+**first 1m close of the following 15m bar** — the same convention as entry
+(signal on closed bar `T`, fill in `T+1`).
+
+This keeps every exit decision on closed-bar information. D3's justification for
+`time_stop_bars = 20` is an argument about *the state at bar 20*, which is only
+knowable once bar 20 has closed; the same reasoning applies to the hard cap.
+
+    time stop:  state check at close of bar time_stop_bars
+                -> fill at first 1m close of bar time_stop_bars + 1
+    max hold:   still open at close of bar max_hold_bars
+                -> fill at first 1m close of bar max_hold_bars + 1
+
+Both taker. **Realised holds are therefore `time_stop_bars + 1` = 21 bars and
+`max_hold_bars + 1` = 41 bars.** Before the 3R fix pass max hold cut at the
+*start* of bar `max_hold_bars`, holding only 39 complete bars — so
+`max_hold_bars = 40` did not mean 40 bars, and the two exits used different
+conventions.
+
+*Footnote, so the discrepancy is not later mistaken for a bug:* `phi` is defined
+on **parameters**, not realised holds, so `threshold_R` is unaffected by this.
+The parameter ratio is 20/40 = 0.500; the realised ratio is 21/41 ≈ 0.512.
+Nothing derives from the realised ratio.
+
+`max_walk_minutes` is derived as `(max_hold_bars + 1) * 15 + 2` so the buffer
+always outlasts the last minute any rule can fire.
 
 **The time stop is a STATE CHECK, not a latch.** At the close of the 15m bar
 `time_stop_bars` after entry, the trade must *be* at or above `threshold_R`, net

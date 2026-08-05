@@ -108,11 +108,16 @@ def test_config_rejects_max_hold_not_greater_than_time_stop():
 
 
 def test_walk_buffer_is_derived_and_outlasts_max_hold():
-    """The buffer must never be able to end a trade before max_hold_bars."""
+    """The buffer must never be able to end a trade before max_hold can fire.
+
+    TIGHTENED by the 3R fix pass: max hold now executes on the first minute of
+    bar max_hold_bars+1, so the buffer must reach that minute index, not merely
+    the previous bar.
+    """
     for dp in (10, 20, 48):
         cfg = make_cfg(donchian_period=dp, tau=1.0)
         need_minutes = (cfg.max_hold_bars + 1) * 15
-        assert simulate.max_walk_minutes(cfg) > need_minutes - 15, (
+        assert simulate.max_walk_minutes(cfg) > need_minutes, (
             "walk buffer could terminate a trade before max_hold")
 
 
@@ -146,7 +151,9 @@ def test_at_threshold_at_the_checkpoint_close_continues():
     t, _ = run(bars, cfg=cfg)
     assert t["at_threshold_at_checkpoint"] is True
     assert t["exit_reason"] == "max_hold"
-    assert t["bars_held"] == cfg.max_hold_bars
+    # UPDATED by the 3R fix pass: max hold now decides on the CLOSE of bar
+    # max_hold_bars and executes on the next bar, like every other exit.
+    assert t["bars_held"] == cfg.max_hold_bars + 1
 
 
 def test_exactly_at_threshold_at_the_checkpoint_continues():
@@ -217,8 +224,9 @@ def test_above_threshold_then_max_hold_cap():
             + flat(simulate.max_walk_minutes(cfg), price=round(r1 + 0.50, 2)))
     t, _ = run(bars, cfg=cfg)
     assert t["exit_reason"] == "max_hold"
-    assert t["bars_held"] == cfg.max_hold_bars
-    assert t["exit_ts"] == ENTRY_TS + simulate.BAR_15M_MS * cfg.max_hold_bars
+    # UPDATED by the 3R fix pass: see test_at_threshold_at_the_checkpoint_close_continues.
+    assert t["bars_held"] == cfg.max_hold_bars + 1
+    assert t["exit_ts"] == ENTRY_TS + simulate.BAR_15M_MS * (cfg.max_hold_bars + 1)
 
 
 def test_above_threshold_then_stop():
@@ -328,3 +336,134 @@ def test_short_side_net_threshold_is_symmetric():
     _, _, net = costs.trade_pnl(100.0, r1, q, "short",
                                 cfg.taker_fee, cfg.taker_fee)
     assert net >= cfg.risk_usd - 1e-9
+
+
+# --------------------------------------------------------------------------
+# 3R fix pass -- symmetric exit timing
+# --------------------------------------------------------------------------
+
+def test_time_stop_holds_time_stop_bars_plus_one():
+    cfg = make_cfg()
+    bars = [ENTRY_BAR] + flat(simulate.max_walk_minutes(cfg), price=100.0)
+    t, _ = run(bars, cfg=cfg)
+    assert t["exit_reason"] == "time_stop"
+    assert t["bars_held"] == cfg.time_stop_bars + 1
+
+
+def test_max_hold_holds_max_hold_bars_plus_one():
+    cfg = make_cfg()
+    q, r1, tgt = levels(cfg)
+    bars = ([ENTRY_BAR]
+            + flat(simulate.max_walk_minutes(cfg), price=round(r1 + 0.50, 2)))
+    t, _ = run(bars, cfg=cfg)
+    assert t["exit_reason"] == "max_hold"
+    assert t["bars_held"] == cfg.max_hold_bars + 1
+
+
+def test_both_exits_use_the_same_decide_then_execute_convention():
+    """Every exit decides on a CLOSED 15m bar and fills on the next one.
+
+    This is the entry convention (signal on closed bar T, fill in T+1) applied
+    to exits. Before the fix pass max hold cut at the START of bar
+    max_hold_bars, so `max_hold_bars = 40` did not actually mean 40 bars.
+    """
+    cfg = make_cfg()
+    q, r1, tgt = levels(cfg)
+
+    below = [ENTRY_BAR] + flat(simulate.max_walk_minutes(cfg), price=100.0)
+    above = ([ENTRY_BAR]
+             + flat(simulate.max_walk_minutes(cfg), price=round(r1 + 0.50, 2)))
+
+    ts_trade, _ = run(below, cfg=cfg)
+    mh_trade, _ = run(above, cfg=cfg)
+
+    for t, n in ((ts_trade, cfg.time_stop_bars), (mh_trade, cfg.max_hold_bars)):
+        # Executed at the FIRST 1m bar of bar n+1 ...
+        assert t["exit_ts"] == ENTRY_TS + simulate.BAR_15M_MS * (n + 1)
+        # ... which is exactly one minute past the close of bar n, not at it.
+        decision_close = (ENTRY_TS + simulate.BAR_15M_MS * n
+                          + simulate.BAR_15M_MS - simulate.BAR_1M_MS)
+        assert t["exit_ts"] == decision_close + simulate.BAR_1M_MS
+        assert t["bars_held"] == n + 1
+
+
+def test_walk_buffer_still_covers_the_max_hold_execution_minute():
+    """The buffer must outlast the LAST minute any rule can fire."""
+    for dp in (10, 20, 48):
+        cfg = make_cfg(donchian_period=dp, tau=1.0)
+        last_rule_minute_index = (cfg.max_hold_bars + 1) * 15
+        assert simulate.max_walk_minutes(cfg) > last_rule_minute_index, (
+            "walk buffer could expire before max hold could fire, which would "
+            "misreport a trading decision as insufficient_data")
+
+
+def test_exhausting_the_buffer_is_still_insufficient_data_not_walk_end():
+    cfg = make_cfg()
+    bars = [ENTRY_BAR] + flat(30, price=100.0)
+    t, _ = run(bars, cfg=cfg)
+    assert t["exit_reason"] == "insufficient_data"
+    assert "walk_end" not in simulate.EXIT_REASONS
+
+
+def test_realised_pace_ratio_differs_from_the_parameter_ratio():
+    """A footnote, pinned so it is not later mistaken for a bug.
+
+    phi is defined on PARAMETERS (20/40 = 0.500), so threshold_R is unaffected
+    by the fix. Realised holds are 21 and 41 bars, a ratio of ~0.512. Nothing
+    derives from the realised ratio.
+    """
+    cfg = make_cfg(donchian_period=20, tau=1.0, phi=1.0)
+    assert cfg.time_stop_bars / cfg.max_hold_bars == pytest.approx(0.500)
+    realised = (cfg.time_stop_bars + 1) / (cfg.max_hold_bars + 1)
+    assert realised == pytest.approx(21 / 41)
+    assert realised == pytest.approx(0.5122, abs=1e-4)
+    assert cfg.threshold_r == pytest.approx(1.0), "threshold_R must not move"
+
+
+# --------------------------------------------------------------------------
+# 3R fix pass -- threshold solve pinned to hand arithmetic
+# --------------------------------------------------------------------------
+
+def test_threshold_solve_matches_hand_arithmetic_at_a_coarse_tick():
+    """Pin the solve where tick rounding CANNOT hide an error of report-08 size.
+
+    reports/08_point_3r.md originally printed the unrounded solve as 103.2836
+    where the formula gives 103.288673 -- a relative error of ~4.7e-5. At
+    ETHUSDT's 0.01 tick on a ~100 price both round to 103.29, so the fixture
+    could not tell them apart. On a BTCUSDT-scale price with a 0.1 tick the
+    same relative error is ~1 unit, i.e. about 10 ticks, so it cannot hide.
+    """
+    cfg = make_cfg()
+    tick = 0.1                      # BTCUSDT
+    entry, stop = 20000.0, 19796.0  # ~1.02% stop, floor-scale
+    q = costs.position_size(entry, stop, "long", cfg, "BTCUSDT")
+
+    f = cfg.taker_fee
+    net = cfg.threshold_r * cfg.risk_usd
+    expected_raw = (net / q + entry * (1 + f)) / (1 - f)
+    expected = costs.round_to_tick(expected_raw, tick, "up")
+
+    got = costs.solve_r_level(entry, q, "long", cfg, tick)
+    assert got == pytest.approx(expected)
+
+    # The error in the report prose would have been ~10 ticks off here.
+    bad_raw = expected_raw * (1.0 - 4.7e-5)
+    assert abs(costs.round_to_tick(bad_raw, tick, "up") - got) > 5 * tick, (
+        "fixture is too coarse to detect the error class it exists to catch")
+
+    # And the level really does deliver threshold_R net of costs.
+    _, _, realised = costs.trade_pnl(entry, got, q, "long", f, f)
+    assert realised >= net - 1e-9
+    assert realised == pytest.approx(net, abs=2 * q * tick)
+
+
+def test_threshold_solve_short_side_at_a_coarse_tick():
+    cfg = make_cfg()
+    tick = 0.1
+    entry, stop = 20000.0, 20204.0
+    q = costs.position_size(entry, stop, "short", cfg, "BTCUSDT")
+    f = cfg.taker_fee
+    net = cfg.threshold_r * cfg.risk_usd
+    expected = costs.round_to_tick(
+        (entry * (1 - f) - net / q) / (1 + f), tick, "down")
+    assert costs.solve_r_level(entry, q, "short", cfg, tick) == pytest.approx(expected)

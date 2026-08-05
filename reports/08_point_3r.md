@@ -163,7 +163,9 @@ A trade that **touches +1R intrabar at minute 1**, drifts back to 100.00, and is
 
 Reading the three things that matter:
 
-**The `threshold_R` solve.** `phi` 1.0 × `target_R` 2.0 × (20/40) = **1R** — derived, not supplied. The price is then solved net of costs: `X = (net/q + P(1+f_taker)) / (1 − f_taker)` = `(20/6.31572299 + 100×1.0006) / 0.9994` = 103.2836…, rounded **up** to tick → **103.29**. Gross 1R would have been 103.00; the 0.29 gap is the two fee legs, and a trade sitting between 103.00 and 103.29 has not made 1R after costs.
+**The `threshold_R` solve.** `phi` 1.0 × `target_R` 2.0 × (20/40) = **1R** — derived, not supplied. The price is then solved net of costs: `X = (net/q + P(1+f_taker)) / (1 − f_taker)` = `(20/6.31572299 + 100×1.0006) / 0.9994` = `(3.1667 + 100.06) / 0.9994` = 103.288673…, rounded **up** to tick → **103.29**. Gross 1R would have been 103.00; the 0.29 gap is the two fee legs, and a trade sitting between 103.00 and 103.29 has not made 1R after costs.
+
+> **Correction (3R fix pass, `reports/09_point_3r_fix.md` §3).** This line originally printed the unrounded solve as `103.2836`, which was a transcription error in the prose. The exact value is **103.28867320392236**, which is what the code produces and what the documented formula gives. Both round to 103.29 at ETHUSDT's 0.01 tick, so no fixture, test or golden file was affected. A test at a coarser tick now pins the solve so this error class cannot hide behind rounding again.
 
 **The checkpoint.** At minute 1 the bar's high was **103.34 ≥ 103.29**, so `touched_threshold_intrabar` is `True` — under the old latch this trade would have survived to `max_hold`. At the checkpoint close (minute 314, the last minute of the 15m bar 20 bars after entry) the price is **100.00 < 103.29**, so the state check fails and the trade is cut. Execution is minute 315, the first minute of the next 15m bar.
 

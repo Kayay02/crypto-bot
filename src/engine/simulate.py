@@ -24,12 +24,15 @@ BAR_1M_MS = 60_000
 def max_walk_minutes(cfg):
     """1m bars to load per trade. DERIVED from max_hold_bars, never a rule.
 
-    Entry minute, then bars 1..max_hold_bars, then the single execution minute
-    of bar max_hold_bars+1. Sizing this buffer from the time stop is what made
-    the walk act as an unconditional exit (defect B1); it must always be large
-    enough that running out of buffer means running out of DATA.
+    The last minute any rule can fire is the FIRST minute of bar
+    max_hold_bars+1, which sits at minute index (max_hold_bars+1)*15 from the
+    entry minute -- so the buffer needs that index to exist, plus slack.
+
+    Sizing this buffer from the time stop is what made the walk act as an
+    unconditional exit (defect B1); it must always be large enough that running
+    out of buffer means running out of DATA, never that a rule fired.
     """
-    return cfg.max_hold_bars * 15 + 2
+    return (cfg.max_hold_bars + 1) * 15 + 2
 
 
 @dataclass
@@ -153,17 +156,24 @@ def simulate_trade(signal, bars_1m, cfg, tick, trace=None, order_spec=None):
     # Decision on the CLOSE of the 15m bar `time_stop_bars` after entry;
     # execution on the first 1m bar of the NEXT 15m bar, mirroring the entry
     # convention (decide on a closed bar, act on the next one).
+    # BOTH exits use the SAME convention, matching entry: decide on a CLOSED
+    # 15m bar, execute at the first 1m close of the following bar. Realised
+    # holds are therefore time_stop_bars+1 and max_hold_bars+1 bars.
     checkpoint_close_ts = (entry_ts + BAR_15M_MS * cfg.time_stop_bars
                            + BAR_15M_MS - BAR_1M_MS)
     time_stop_exec_ts = entry_ts + BAR_15M_MS * (cfg.time_stop_bars + 1)
-    max_hold_deadline = entry_ts + BAR_15M_MS * cfg.max_hold_bars
+    max_hold_close_ts = (entry_ts + BAR_15M_MS * cfg.max_hold_bars
+                         + BAR_15M_MS - BAR_1M_MS)
+    max_hold_exec_ts = entry_ts + BAR_15M_MS * (cfg.max_hold_bars + 1)
     tr(f"  WALK    {len(walk) - 1} 1m bars after the entry minute")
     tr(f"          checkpoint CLOSE   {checkpoint_close_ts} (close of 15m bar "
        f"{cfg.time_stop_bars} after entry) -- STATE CHECK")
-    tr(f"          time-stop execution {time_stop_exec_ts} (only if BELOW "
-       f"threshold at that close)")
-    tr(f"          max-hold execution  {max_hold_deadline} (bar "
+    tr(f"          time-stop execution {time_stop_exec_ts} (first 1m close of "
+       f"bar {cfg.time_stop_bars + 1}; only if BELOW threshold at that close)")
+    tr(f"          max-hold CLOSE     {max_hold_close_ts} (close of 15m bar "
        f"{cfg.max_hold_bars} after entry)")
+    tr(f"          max-hold execution  {max_hold_exec_ts} (first 1m close of "
+       f"bar {cfg.max_hold_bars + 1})")
     if not cfg.time_stop_enabled:
         tr(f"          NO_TIME_STOP arm: checkpoint disabled")
 
@@ -256,12 +266,15 @@ def simulate_trade(signal, bars_1m, cfg, tick, trace=None, order_spec=None):
             break
 
         # ---- max hold: the cap for trades that passed the checkpoint -------
-        if ts >= max_hold_deadline:
+        # Decided on the close of bar max_hold_bars, executed on the first 1m
+        # close of bar max_hold_bars+1 -- the same convention as the time stop
+        # and as entry. The trade therefore holds max_hold_bars COMPLETE bars.
+        if ts >= max_hold_exec_ts:
             exit_reason, resolution = "max_hold", "observed"
             exit_px = round_to_tick(float(b["close"]), tick, "nearest")
             exit_ts = ts
-            tr(f"    [{i:3d}] ts={ts} MAX HOLD ({cfg.max_hold_bars} bars) "
-               f"-> exit at 1m close {_fmt(exit_px)}")
+            tr(f"    [{i:3d}] ts={ts} MAX HOLD (open at the close of bar "
+               f"{cfg.max_hold_bars}) -> exit at 1m close {_fmt(exit_px)}")
             break
 
     if exit_ts is None:
