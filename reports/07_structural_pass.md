@@ -423,4 +423,21 @@ Two further points bearing on whoever resolves it, neither of which is a resolut
 
 ## 9. Git state
 
-Commit hash, `git status` and `git diff --stat` are recorded here after the commit is made — see the commit referenced in §1.
+Commit: **`de4b8d0f0a4c2bc96d244ee76a8c993d0077a3f4`** (`de4b8d0`) — `analysis: structural measurement pass (1R pre-checks)`
+
+`git diff --stat` for the commit:
+
+```
+ docs/handoff/05_point_1r.md         |   38 +-
+ docs/prompts/07_structural_pass.md  |  198 ++
+ reports/07_structural_pass.md       |  426 +++
+ reports/07_structural_pass_raw.json | 5790 +++++++++++++++++++++++++++++++++++
+ src/analysis/__init__.py            |   10 +
+ src/analysis/structural_pass.py     |  670 ++++
+ tests/test_structural_pass.py       |  386 +++
+ 7 files changed, 7508 insertions(+), 10 deletions(-)
+```
+
+`git status` after the commit: **clean** (this section's own edit is committed in an immediately following commit, for the reason given in `reports/06_1r_errata.md` §2 — a report cannot contain the hash of the commit that creates it).
+
+**No file under `src/engine/`, `config/` or `data/` appears in the diff.** The only modified file is `docs/handoff/05_point_1r.md`, whose 28 insertions and 10 deletions are exactly C1 (seven heading renames plus two cross-references), C2 (the B4 sample-size paragraph) and C3 (the new subsection 8.1). Everything else is a new file.
