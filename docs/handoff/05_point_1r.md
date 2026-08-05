@@ -45,7 +45,7 @@ stop_min_pct = max( N_cost * c_roundtrip , risk_usd / (E * L_max) )
 
 - `c_roundtrip` — round-trip cost on the stop path (taker in, taker out = 0.12% before slippage, plus the engine's slippage haircut both sides).
 - `N_cost` — cost-dominance ratio, proposed at 6 (costs may consume at most ~1/6 of the risk distance). This is the one chosen number remaining.
-- `risk_usd` — fixed dollar risk per trade, $20 (see Section 13, A3). `R` is reserved exclusively for the risk multiple.
+- `risk_usd` — fixed dollar risk per trade, $20 (see Section 13, ER3). `R` is reserved exclusively for the risk multiple.
 - `E` — account equity. `L_max` — maximum leverage, 3.0.
 - Leverage term = `risk_usd / (E * L_max)` = $20 / ($2,000 * 3.0) = 0.333%.
 
@@ -136,7 +136,7 @@ Both binary — a continuous score is rejected because the kill condition "gated
 
 Four arms, all filters of the same signal-mode trade table (identical universe by construction): **ungated / RVOL only / vwap only / both**.
 
-*Sample-size risk:* two conjunctive conditions multiply rejection (~66% x ~50% = ~33% of breakout bars), colliding with the evidence minimum of 200 IS / 50 OOS / 30 per direction per symbol.
+*Sample-size risk:* two conjunctive conditions multiply rejection. RVOL admits ~66% of breakout bars (measured); `vwap_position` has no threshold set and therefore no measured pass rate, so its term is the design range of 25–75% fixed by the ER1 dispersion requirement. The joint survival band is therefore **16%–50% of breakout bars**, colliding with the evidence minimum of 200 IS / 50 OOS / 30 per direction per symbol. See **Section 13, ER2** — the earlier figure `~50% ⇒ ~33%` used an invented pass rate and is superseded.
 
 **Pre-committed resolution order** if minimums cannot be met: loosen thresholds → extend the in-sample window → drop to a single condition. **THE EVIDENCE MINIMUM IS NOT ON THAT LIST and does not move.** Trade counts per arm per symbol are reported BEFORE thresholds are fixed.
 
@@ -314,6 +314,24 @@ Narrative form: 15m Bitget USDT-M perps on BTC/ETH/SOL, ~$2,000 capital, `risk_u
 
 **Parameter surface count:** reduced from roughly 15 to roughly 13, with `rsi_lower` as a live drop candidate.
 
+### 8.1 Tick Schedule (recorded fact)
+
+Recorded here because the ER1 B3 validity tolerance is denominated in ticks and no handoff previously carried the values. Read from `config/contracts_cache.json`, which is the engine's own source.
+
+| Symbol | Tick | In force |
+|---|---|---|
+| BTCUSDT | 0.1 | whole window |
+| ETHUSDT | 0.01 | whole window |
+| SOLUSDT | 0.0001 | before 2024-08-14T04:05:00Z (ts 1723608300000) |
+| SOLUSDT | 0.001 | from 2024-08-14T04:05:00Z |
+
+Two things about this that are easy to get wrong:
+
+- **The tick is `priceEndStep × 10^-pricePlace`, not `10^-pricePlace`.** The two coincide today only because `priceEndStep == 1` for all three symbols. Collapsing them would silently break the moment Bitget changes a step.
+- **A tick is a step function of time, not a scalar.** Bitget's contracts endpoint reports the CURRENT contract state only, so the historical boundary is not recoverable from the API. The SOL change was discovered by **grid-validating historical prices** — checking every high/low/close against the candidate grid — and is frozen in the cache. Two isolated SOL venue prints after the boundary carry four decimals and are pinned individually as known exceptions, so that a genuinely new off-grid price still fails rather than being absorbed by a loosened tolerance.
+
+Both SOL segments are recorded, but only the 0.0001 segment is in force inside the 2022–23 measurement window.
+
 ---
 
 ## 9. Labelled Variants
@@ -342,7 +360,7 @@ Not baseline. Must not be silently promoted.
 **Also unchanged:**
 - The performance firewall, until it is deliberately lifted at the start of Point 4, after the validation design is pre-registered.
 - Every Point 2 data decision and every Point 3 engine semantic.
-- 15m timeframe, Bitget, BTC/ETH/SOL, $2,000 account, `risk_usd` = $20 (FIXED) per trade after costs. This is the authoritative risk denomination for all backtesting and validation; percent-of-equity sizing is deferred to Point 7 as a live-deployment decision (Section 13, A3).
+- 15m timeframe, Bitget, BTC/ETH/SOL, $2,000 account, `risk_usd` = $20 (FIXED) per trade after costs. This is the authoritative risk denomination for all backtesting and validation; percent-of-equity sizing is deferred to Point 7 as a live-deployment decision (Section 13, ER3).
 - 2025-26 remains an untouched out-of-sample holdout.
 
 ---
@@ -373,7 +391,7 @@ The Point 1R handoff report flagged eight internal inconsistencies without resol
 
 ---
 
-### A1 — Numeric kill thresholds for the structural checks
+### ER1 — Numeric kill thresholds for the structural checks
 
 The 1R.2 and 1R.5 pre-checks were specified qualitatively ("very high", "clusters tightly", "rejects almost nothing"). Deciding those cuts after seeing the measurements would be threshold-shopping. The cuts are therefore fixed now.
 
@@ -419,7 +437,7 @@ The more stable denomination must win in **at least 2 of 3 symbols across both y
 
 ---
 
-### A2 — B4 sample-size arithmetic corrected
+### ER2 — B4 sample-size arithmetic corrected
 
 The figure recorded in B4, `~66% x ~50% = ~33%`, used an invented 50% pass rate for `vwap_position`, which has no threshold set and therefore no measured pass rate. It is replaced by the design range:
 
@@ -433,7 +451,7 @@ The pre-committed resolution order if evidence minimums cannot be met is **uncha
 
 ---
 
-### A3 — Risk denomination: fixed dollar risk is authoritative
+### ER3 — Risk denomination: fixed dollar risk is authoritative
 
 Sections 8 and 10 stated "$20 risk per trade" and "1% risk after costs". These agree at exactly $2,000 equity and diverge as equity moves.
 
@@ -445,7 +463,7 @@ Applied in place in Sections 8 and 10.
 
 ---
 
-### A4 — Symbol collision: `R` resolved
+### ER4 — Symbol collision: `R` resolved
 
 `R` denoted both dollar risk (in A2's floor formula) and the risk multiple (in "+2R", "0.05R"). The notation is fixed throughout the document:
 
@@ -469,7 +487,7 @@ The leverage term evaluates to `$20 / ($2,000 × 3.0)` = **0.333%**.
 
 ---
 
-### A5 — The Guard Rail Principle is BINDING, not rationale
+### ER5 — The Guard Rail Principle is BINDING, not rationale
 
 It has already been applied to kill two proposals (a volatility-relative floor in 1R.1, and `rsi_upper` in 1R.5), so it functions as a rule regardless of how it was labelled. Its status is recorded explicitly:
 
@@ -477,13 +495,13 @@ It has already been applied to kill two proposals (a volatility-relative floor i
 
 ---
 
-### A6 — Naming identity stated
+### ER6 — Naming identity stated
 
 `checkpoint_bars` in the D4 pace-factor formula and `time_stop_bars` in D3 are the **same quantity under two names**. The identity is stated explicitly, and **`time_stop_bars` is the canonical name**. Applied in place in D4.
 
 ---
 
-### A7 — Amendment counts corrected
+### ER7 — Amendment counts corrected
 
 Section headings stated amendment counts that did not match their contents. The headings are corrected to match what is enumerated:
 
