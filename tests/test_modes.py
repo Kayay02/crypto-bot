@@ -4,19 +4,23 @@ import costs
 import pandas as pd
 import pytest
 import simulate
-from conftest import make_1m
+from conftest import make_1m, make_cfg
 from test_portfolio import (BAR, ENTRY_BAR, STOP_MIN, T0, TICK, ConstTick,
                             bars15, flat, minutes_with_stop_after, sig,
                             sig_frame)
 
 
-def go(signals, cfg=None, mode="portfolio", df15=None, mins=None, n=60):
-    cfg = cfg or costs.CostConfig()
+SYMS2 = ("ETHUSDT", "BTCUSDT")
+
+
+def go(signals, cfg=None, mode="portfolio", df15=None, mins=None, n=60,
+       symbols=("ETHUSDT",)):
+    cfg = cfg or make_cfg()
     df15 = df15 if df15 is not None else bars15(n)
     mins = mins if mins is not None else make_1m(T0, [ENTRY_BAR] + flat(4000))
     return simulate.run_backtest(
-        signals, {"ETHUSDT": df15}, {"ETHUSDT": mins}, cfg,
-        {"ETHUSDT": ConstTick(TICK)}, mode=mode)
+        signals, {s: df15 for s in symbols}, {s: mins for s in symbols}, cfg,
+        {s: ConstTick(TICK) for s in symbols}, mode=mode)
 
 
 # --------------------------------------------------------------------------
@@ -43,24 +47,40 @@ def test_signal_mode_allows_overlapping_trades_on_one_symbol():
 
 
 def test_signal_mode_ignores_cooldown():
+    """UPDATED at 3R: cooldown_bars must now be set explicitly.
+
+    The old version relied on the 20-bar-extreme rule binding at the default
+    cooldown_bars=0. That rule is gone (logical no-op), so the mode difference
+    is now demonstrated with a positive bar count.
+    """
+    cfg = make_cfg(cooldown_bars=100)
     signals = sig_frame([
         sig("ETHUSDT", "long", T0 + BAR * 5),
         sig("ETHUSDT", "long", T0 + BAR * 30),
     ])
     mins = minutes_with_stop_after([T0 + BAR * 6, T0 + BAR * 31])
-    pf, pf_ref, _ = go(signals, mode="portfolio", mins=mins)
-    sg_, sg_ref, _ = go(signals, mode="signal", mins=mins)
+    pf, pf_ref, _ = go(signals, cfg=cfg, mode="portfolio", mins=mins)
+    sg_, sg_ref, _ = go(signals, cfg=cfg, mode="signal", mins=mins)
     assert pf_ref["cooldown"] == 1 and len(pf) == 1
     assert sg_ref["cooldown"] == 0 and len(sg_) == 2
 
 
 def test_signal_mode_ignores_margin_cap():
-    cfg = costs.CostConfig(max_leverage=0.1)      # cannot fund even one trade
-    signals = sig_frame([sig("ETHUSDT", "long", T0 + BAR * 5)])
-    pf, pf_ref, _ = go(signals, cfg=cfg, mode="portfolio")
-    sg_, sg_ref, _ = go(signals, cfg=cfg, mode="signal")
-    assert len(pf) == 0 and pf_ref["insufficient_margin"] == 1
-    assert len(sg_) == 1 and sg_ref["insufficient_margin"] == 0
+    """UPDATED at 3R: a SINGLE trade can no longer be unfundable.
+
+    The derived floor's leverage term guarantees notional < E * L_max, so the
+    cap now binds only on CONCURRENT positions. Two overlapping signals on
+    different symbols are used instead of one oversized trade.
+    """
+    cfg = make_cfg(max_leverage=0.35)     # cap $700; one trade is ~$630
+    signals = sig_frame([
+        sig("ETHUSDT", "long", T0 + BAR * 5),
+        sig("BTCUSDT", "long", T0 + BAR * 5),
+    ])
+    pf, pf_ref, _ = go(signals, cfg=cfg, mode="portfolio", symbols=SYMS2)
+    sg_, sg_ref, _ = go(signals, cfg=cfg, mode="signal", symbols=SYMS2)
+    assert len(pf) == 1 and pf_ref["insufficient_margin"] == 1
+    assert len(sg_) == 2 and sg_ref["insufficient_margin"] == 0
 
 
 def test_single_isolated_trade_is_identical_in_both_modes():
@@ -124,7 +144,7 @@ def _cooldown_bars_run(cooldown_bars, gap_bars):
     rule clears immediately and cooldown_bars is the ONLY thing that can bind.
     Otherwise this would just be re-testing the extreme rule.
     """
-    cfg = costs.CostConfig(cooldown_bars=cooldown_bars)
+    cfg = make_cfg(cooldown_bars=cooldown_bars)
     df15 = bars15(90)
     for i in range(FIRST_SIG_BAR + 2, 90):
         df15.loc[i, "high"] = 200.0 + i
@@ -156,9 +176,9 @@ def test_cooldown_bars_three_permits_after_the_window():
 
 
 def test_cooldown_bars_default_is_zero():
-    assert costs.CostConfig().cooldown_bars == 0
+    assert make_cfg().cooldown_bars == 0
 
 
 def test_negative_cooldown_bars_rejected():
     with pytest.raises(ValueError, match="cooldown_bars"):
-        costs.CostConfig(cooldown_bars=-1)
+        make_cfg(cooldown_bars=-1)

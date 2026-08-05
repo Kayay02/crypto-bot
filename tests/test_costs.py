@@ -5,6 +5,7 @@ formula in the spec, not copied from engine output.
 """
 
 import costs
+from conftest import make_cfg
 import pytest
 from costs import LONG, SHORT
 
@@ -32,22 +33,56 @@ def test_tick_rounding_rejects_bad_tick():
 
 
 def test_stop_distance_floor_and_cap(cfg):
-    # ATR tiny -> floored at 1.0% of entry.
-    s = costs.stop_price(100.0, 0.01, LONG, cfg, TICK)
-    assert s == pytest.approx(99.0)
+    """UPDATED at 3R: the floor is DERIVED per symbol, no longer a flat 1.0%.
+
+    ETHUSDT floor = 6 * (0.12% + 5bps) = 1.020% of entry.
+    """
+    floor_pct = cfg.stop_min_pct("ETHUSDT")
+    assert floor_pct == pytest.approx(0.01020)
+    # ATR tiny -> floored at the derived floor.
+    s = costs.stop_price(100.0, 0.01, LONG, cfg, TICK, "ETHUSDT")
+    assert s == pytest.approx(100.0 - 100.0 * floor_pct, abs=TICK)
     # ATR huge -> capped at 3.5% of entry.
-    s = costs.stop_price(100.0, 50.0, LONG, cfg, TICK)
+    s = costs.stop_price(100.0, 50.0, LONG, cfg, TICK, "ETHUSDT")
     assert s == pytest.approx(96.5)
     # In between -> 1.5 * ATR.
-    s = costs.stop_price(100.0, 2.0, LONG, cfg, TICK)
+    s = costs.stop_price(100.0, 2.0, LONG, cfg, TICK, "ETHUSDT")
     assert s == pytest.approx(97.0)
+
+
+def test_stop_binding_mechanism_is_reported(cfg):
+    """A7 provenance counter: which of atr / floor / cap set the stop."""
+    assert costs.stop_geometry(100.0, 0.01, LONG, cfg, TICK, "ETHUSDT")[1] == "floor"
+    assert costs.stop_geometry(100.0, 50.0, LONG, cfg, TICK, "ETHUSDT")[1] == "cap"
+    assert costs.stop_geometry(100.0, 2.0, LONG, cfg, TICK, "ETHUSDT")[1] == "atr"
+    # Short side classifies identically -- the band is on distance, not side.
+    assert costs.stop_geometry(100.0, 0.01, SHORT, cfg, TICK, "ETHUSDT")[1] == "floor"
+
+
+def test_derived_floor_matches_hand_arithmetic_for_both_cost_structures(cfg):
+    """1.020% BTC/ETH (5bps haircut), 1.320% SOL (10bps). Cost term dominates."""
+    for sym, expect in (("BTCUSDT", 0.01020), ("ETHUSDT", 0.01020),
+                        ("SOLUSDT", 0.01320)):
+        c = cfg.c_roundtrip(sym)
+        assert c == pytest.approx(2 * 0.0006 + 0.0 + cfg.haircut_bps(sym) / 1e4)
+        assert cfg.stop_min_pct(sym) == pytest.approx(expect)
+        # The cost term, not the leverage term, is what binds.
+        assert 6.0 * c > cfg.leverage_term()
+    assert cfg.leverage_term() == pytest.approx(20.0 / (2000.0 * 3.0))
+    assert cfg.leverage_term() == pytest.approx(0.0033333, abs=1e-6)
+
+
+def test_leverage_term_stays_in_the_formula_even_though_it_never_binds(cfg):
+    """Drop n_cost far enough and the leverage term must take over."""
+    low = make_cfg(n_cost=0.5)
+    assert low.stop_min_pct("ETHUSDT") == pytest.approx(low.leverage_term())
 
 
 def test_stop_rounds_away_from_entry(cfg):
     """Rounding must never tighten the stop -- that would understate risk."""
-    s_long = costs.stop_price(100.0, 2.0 / 1.5 * 1.0001, LONG, cfg, TICK)
+    s_long = costs.stop_price(100.0, 2.0 / 1.5 * 1.0001, LONG, cfg, TICK, "ETHUSDT")
     assert s_long <= 100.0 - 2.0 * 1.0001 + 1e-9 + TICK
-    s_short = costs.stop_price(100.0, 2.0, SHORT, cfg, TICK)
+    s_short = costs.stop_price(100.0, 2.0, SHORT, cfg, TICK, "ETHUSDT")
     assert s_short >= 103.0 - 1e-9
 
 
@@ -146,6 +181,6 @@ def test_entry_slippage_defaults_to_zero(cfg):
 
 
 def test_entry_slippage_is_configurable_and_directional():
-    c = costs.CostConfig(entry_slippage_bps=10.0)
+    c = make_cfg(entry_slippage_bps=10.0)
     assert costs.entry_fill_price(100.0, LONG, c, TICK) == pytest.approx(100.10)
     assert costs.entry_fill_price(100.0, SHORT, c, TICK) == pytest.approx(99.90)

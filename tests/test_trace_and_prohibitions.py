@@ -6,7 +6,7 @@ import re
 import costs
 import pytest
 import simulate
-from conftest import make_1m, make_signal
+from conftest import make_1m, make_cfg, make_signal
 
 ENGINE_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src", "engine")
@@ -18,7 +18,7 @@ ENTRY_BAR = (100.10, 99.90, 100.0)
 
 
 def _trace_of_a_stop():
-    cfg = costs.CostConfig()
+    cfg = make_cfg()
     bars = [ENTRY_BAR, (99.9, 96.0, 96.5)] + [(100.1, 99.9, 100.0)] * 3
     sig = make_signal(sig_ts=SIG_TS, atr=2.0)
     tr = simulate.Trace(enabled=True)
@@ -49,7 +49,7 @@ def test_g3_trace_numbers_reconcile_by_hand():
 
 
 def test_g3_trace_is_off_by_default():
-    cfg = costs.CostConfig()
+    cfg = make_cfg()
     bars = [ENTRY_BAR] + [(100.1, 99.9, 100.0)] * 3
     sig = make_signal(sig_ts=SIG_TS)
     tr = simulate.Trace()

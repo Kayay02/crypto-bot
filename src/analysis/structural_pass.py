@@ -117,6 +117,26 @@ def _year_of(ts):
 # bar-level derived quantities
 # ---------------------------------------------------------------------------
 
+def rvol_prior(volume, window=20):
+    """FLAT RVOL: bar volume / mean volume of the PRIOR `window` bars.
+
+    This was the engine's RVOL before Point 3R replaced it with the
+    session-normalised baseline. It is retained HERE, not in the engine,
+    because M4 measures the pre-3R gate and that measurement must stay
+    reproducible after the engine stopped implementing it. Not a production
+    path -- nothing in src/engine imports this.
+    """
+    v = pd.Series(volume)
+    base = v.rolling(window).mean().shift(1)
+    return (v / base.replace(0.0, np.nan)).to_numpy()
+
+
+# baseline_days used only to satisfy compute_indicators' signature; M1-M9 never
+# read the engine's session rvol column (M4 uses flat rvol, M5 computes its own
+# session rvol per baseline_days).
+_UNUSED_BASELINE_DAYS = 20
+
+
 def bar_frame(df, params=None):
     """Attach engine indicators plus the position/vwap terms under measurement.
 
@@ -125,7 +145,9 @@ def bar_frame(df, params=None):
     They are never allowed to become a division by zero or a silent NaN.
     """
     params = params or signals.SignalParams()
-    out = signals.compute_indicators(df, params)
+    out = signals.compute_indicators(df, params, _UNUSED_BASELINE_DAYS)
+    # Overwrite the engine's session rvol with the FLAT one this pass measures.
+    out["rvol"] = rvol_prior(out["volume"].to_numpy(float))
 
     high = out["high"].to_numpy(float)
     low = out["low"].to_numpy(float)
@@ -177,43 +199,13 @@ def breakout_masks(bf):
 # session-normalised RVOL (B1 proposal) -- causal by construction
 # ---------------------------------------------------------------------------
 
-def session_baseline(ts, values, baseline_days):
-    """Median of the same 15m UTC slot over the trailing COMPLETED prior days.
-
-    Causality is structural, not conventional: the day/slot matrix is rolled
-    over the day axis and then shifted by one whole day, so the value returned
-    for any bar of day D is a function of days [D-baseline_days, D-1] only. Bar
-    T's own day contributes nothing -- not even earlier slots of it.
-
-    min_periods == baseline_days, so a slot with a gap in its history yields
-    NaN rather than a baseline computed from fewer days than requested.
-    """
-    if baseline_days < 1:
-        raise ValueError("baseline_days must be >= 1")
-    ts = np.asarray(ts, dtype=np.int64)
-    values = np.asarray(values, dtype=float)
-    day = ts // DAY_MS
-    slot = (ts // BAR_MS) % SLOTS_PER_DAY
-
-    tbl = pd.DataFrame({"day": day, "slot": slot, "v": values})
-    # Duplicate (day, slot) cannot occur on a deduped 15m series; assert it.
-    if tbl.duplicated(["day", "slot"]).any():
-        raise ValueError("duplicate (day, slot) -- series is not a clean 15m grid")
-    mat = tbl.pivot(index="day", columns="slot", values="v").sort_index()
-    # Reindex onto a contiguous day axis so a missing calendar day consumes a
-    # slot of the trailing window rather than being skipped over.
-    mat = mat.reindex(range(int(mat.index.min()), int(mat.index.max()) + 1))
-    base = mat.rolling(baseline_days, min_periods=baseline_days).median().shift(1)
-
-    lookup = base.stack(future_stack=True)
-    idx = pd.MultiIndex.from_arrays([day, slot])
-    return lookup.reindex(idx).to_numpy(float)
-
-
-def session_rvol(ts, volume, baseline_days):
-    base = session_baseline(ts, volume, baseline_days)
-    base = np.where(base > 0.0, base, np.nan)
-    return np.asarray(volume, dtype=float) / base
+# The session baseline MOVED to src/engine/signals.py in Point 3R, where it is
+# now a production indicator. Re-exported here so this module keeps working and
+# so there is exactly ONE implementation -- two that must agree is a defect
+# waiting to happen. Dependency direction: analysis -> engine, never the
+# reverse.
+session_baseline = signals.session_baseline
+session_rvol = signals.session_rvol
 
 
 # ---------------------------------------------------------------------------
@@ -523,7 +515,11 @@ def m8_floor(bf, symbol, cfg=None, n_cost=6.0):
     computed anchor would read the holdout. This number must never be used as
     the operational anchor.
     """
-    cfg = cfg or costs.CostConfig()
+    # M8 reads only fee/haircut/equity fields. The four no-default parameters
+    # are irrelevant here, so they are given explicitly-arbitrary values purely
+    # to construct the config; nothing below reads them.
+    cfg = cfg or costs.CostConfig(stop_atr_mult=1.0, stop_max_pct=0.035,
+                                  rvol_threshold=1.5, baseline_days=20)
     fees = 2 * cfg.taker_fee
     entry_slip = cfg.entry_slippage_bps / 10_000.0
     haircut = cfg.haircut_bps(symbol) / 10_000.0

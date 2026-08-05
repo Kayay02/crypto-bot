@@ -1,9 +1,14 @@
 {
-  "note": "tick = priceEndStep * 10**-pricePlace; historical segments derived empirically from derived layer",
+  "note": "tick = priceEndStep * 10**-pricePlace; historical segments derived empirically from derived layer. `order` holds CURRENT minimum-order constraints (minTradeNum / minTradeUSDT / sizeMultiplier); unlike the tick these have no recoverable history and are not a schedule over time.",
   "product_type": "USDT-FUTURES",
   "source": "https://api.bitget.com/api/v2/mix/market/contracts",
   "symbols": {
     "BTCUSDT": {
+      "order": {
+        "min_trade_num": 0.0001,
+        "min_trade_usdt": 5.0,
+        "qty_step": 0.0001
+      },
       "segments": [
         [
           0,
@@ -13,6 +18,11 @@
       "symbol": "BTCUSDT"
     },
     "ETHUSDT": {
+      "order": {
+        "min_trade_num": 0.01,
+        "min_trade_usdt": 5.0,
+        "qty_step": 0.01
+      },
       "segments": [
         [
           0,
@@ -22,6 +32,11 @@
       "symbol": "ETHUSDT"
     },
     "SOLUSDT": {
+      "order": {
+        "min_trade_num": 0.1,
+        "min_trade_usdt": 5.0,
+        "qty_step": 0.1
+      },
       "segments": [
         [
           0,

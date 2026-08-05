@@ -1,12 +1,34 @@
 """Pin the hand-verified trade so no future pass may disturb its arithmetic.
 
-BTCUSDT short, signal_bar_ts=1673881200000, verified by hand in the previous
-pass to reconcile to -1.0001R. The cost arithmetic, sizing, target solve and
-slippage placement are locked; this test fails if any of them move.
+BTCUSDT short, signal_bar_ts=1673881200000. The cost arithmetic, sizing, target
+solve and slippage placement are locked; this test fails if any of them move.
+
+RE-PINNED AT POINT 3R, and the reason is recorded because a moved pin is
+otherwise indistinguishable from a broken one. The stop on this trade is
+FLOOR-BOUND, and the floor changed from a hardcoded 1.000% to the derived
+1.020% for BTCUSDT. Nothing else about the trade moved: same signal bar, same
+direction, same entry, same exit reason. Every value below is re-derived by
+hand from the formula, not copied from a run:
+
+    floor   = N_cost * c_roundtrip = 6 * (2*0.0006 + 0 + 5/10_000) = 0.010200
+    stop    = ceil(20741.5 * 1.0102 / 0.1) * 0.1
+            = ceil(20953.0633 / 0.1) * 0.1            = 20953.1
+    s_stop  = 20953.1 * 5/10_000                      = 10.47655
+    move    = 20953.1 - 20741.5                       = 211.6
+    denom   = 211.6 + 20741.5*0.0006 + 20953.1*0.0006 + 10.47655
+                                                      = 247.093310
+    qty     = 20 / 247.093310                         = 0.08094108
+    fill    = ceil((20953.1 + 10.47655) / 0.1) * 0.1  = 20963.6
+    net     = qty*(20741.5 - 20963.6) - fees          = -20.002408
+    R       = -20.002408 / 20                         = -1.0001204
+
+The old pin (stop 20949.0, qty 0.08230832, fill 20959.5, net -20.002617) is the
+same arithmetic against the old 1.000% floor.
 """
 
 import pytest
 import run as engine_run
+from conftest import golden_cfg
 
 SIG_TS = 1673881200000
 SLICE = dict(symbols=["BTCUSDT"], start_ts=1672531200000, end_ts=1675209600000)
@@ -16,19 +38,20 @@ EXPECTED = {
     "direction": "short",
     "entry_ts": 1673882100000,
     "entry_price": 20741.5,
-    "stop_price": 20949.0,
-    "qty": 0.08230832,
-    "exit_price": 20959.5,
+    "stop_price": 20953.1,
+    "qty": 0.08094108,
+    "exit_price": 20963.6,
     "exit_reason": "stop",
     "resolution": "observed",
     "stop_fill_quality": "normal",
-    "r_multiple": -1.0001,
+    "r_multiple": -1.0001204,
+    "stop_binding_mechanism": "floor",
 }
 
 
 @pytest.fixture(scope="module")
 def pinned():
-    trades, _, _ = engine_run.run(variant="gated", **SLICE)
+    trades, _, _ = engine_run.run(variant="gated", cfg=golden_cfg(), **SLICE)
     row = trades[trades["signal_bar_ts"] == SIG_TS]
     assert len(row) == 1, f"pinned trade missing from the universe: {len(row)}"
     return row.iloc[0]
@@ -39,6 +62,15 @@ def test_pinned_trade_entry_and_levels(pinned):
     assert pinned["entry_ts"] == EXPECTED["entry_ts"]
     assert pinned["entry_price"] == pytest.approx(EXPECTED["entry_price"])
     assert pinned["stop_price"] == pytest.approx(EXPECTED["stop_price"])
+    assert pinned["stop_binding_mechanism"] == EXPECTED["stop_binding_mechanism"]
+
+
+def test_pinned_trade_stop_is_the_DERIVED_floor_not_a_hardcoded_one():
+    """The stop must come from the formula, not from a literal 1.0%."""
+    from conftest import golden_cfg
+    cfg = golden_cfg()
+    assert cfg.stop_min_pct("BTCUSDT") == pytest.approx(0.01020)
+    assert cfg.stop_min_pct("BTCUSDT") != 0.010, "old hardcoded floor is void"
 
 
 def test_pinned_trade_sizing_is_unchanged(pinned):
@@ -65,4 +97,4 @@ def test_pinned_trade_pnl_reconciles_by_hand(pinned):
     assert pinned["gross_pnl"] == pytest.approx(gross)
     assert pinned["fees_paid"] == pytest.approx(fees)
     assert pinned["net_pnl"] == pytest.approx(gross - fees)
-    assert pinned["net_pnl"] == pytest.approx(-20.002617, abs=1e-5)
+    assert pinned["net_pnl"] == pytest.approx(-20.002408, abs=1e-5)

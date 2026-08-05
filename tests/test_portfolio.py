@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import simulate
-from conftest import make_1m
+from conftest import make_1m, make_cfg
 
 BAR = simulate.BAR_15M_MS
 T0 = 1_600_000_000_000
@@ -70,13 +70,13 @@ def minutes_with_stop_after(entry_ts_list, total=3000):
     return make_1m(T0, mins)
 
 
-def _cooldown_setup(new_extreme_between):
+def _cooldown_setup(new_extreme_between, cfg=None):
     """Two long signals on one symbol; the first stops out.
 
-    The second is 25 bars later. If `new_extreme_between`, one intervening 15m
-    bar sets a new 20-bar high, which must clear the cooldown.
+    The second is 25 bars later. `new_extreme_between` used to matter; after
+    3R removed the extreme rule it is retained only to show that it does not.
     """
-    cfg = costs.CostConfig()
+    cfg = cfg or make_cfg()
     n = 60
     df15 = bars15(n)
     if new_extreme_between:
@@ -97,22 +97,33 @@ def _cooldown_setup(new_extreme_between):
     return trades, refused
 
 
-def test_fixture_7_cooldown_blocks_reentry_until_new_extreme():
-    trades, refused = _cooldown_setup(new_extreme_between=False)
-    assert len(trades) == 1, "second entry must be blocked by cooldown"
+def test_fixture_7_new_extreme_rule_is_gone():
+    """UPDATED at 3R: the 20-bar-extreme cooldown condition was a logical no-op.
+
+    A long entry requires a close above the Donchian-20 upper band, which IS a
+    new 20-bar high, so the condition that cleared the cooldown was entailed by
+    the condition that triggered it. It could never bind. With cooldown_bars at
+    its default of 0, nothing blocks re-entry regardless of whether a new
+    extreme occurred -- which is the whole point of removing it.
+    """
+    for new_extreme_between in (False, True):
+        trades, refused = _cooldown_setup(new_extreme_between=new_extreme_between)
+        assert len(trades) == 2, "no rule should block re-entry at cooldown_bars=0"
+        assert refused["cooldown"] == 0
+
+
+def test_cooldown_is_now_a_pure_bar_count():
+    """The surviving cooldown is cfg.cooldown_bars and nothing else."""
+    trades, refused = _cooldown_setup(new_extreme_between=False,
+                                      cfg=make_cfg(cooldown_bars=100))
+    assert len(trades) == 1, "second entry must be blocked by the bar count"
     assert trades.iloc[0]["exit_reason"] == "stop"
     assert refused["cooldown"] == 1
 
 
-def test_fixture_7b_new_20_bar_extreme_clears_cooldown():
-    trades, refused = _cooldown_setup(new_extreme_between=True)
-    assert len(trades) == 2, "new 20-bar high must permit re-entry"
-    assert refused["cooldown"] == 0
-
-
 def test_cooldown_is_direction_specific():
     """A stopped long must not block a short (the chosen convention)."""
-    cfg = costs.CostConfig()
+    cfg = make_cfg()
     df15 = bars15(60)
     all_min = make_1m(T0, [ENTRY_BAR, STOP_MIN] + flat(1000))
     signals = sig_frame([
@@ -130,23 +141,39 @@ def test_cooldown_is_direction_specific():
 # Fixture 8 -- funding refusal
 # --------------------------------------------------------------------------
 
-def test_fixture_8_unfundable_trade_is_refused():
-    """Notional beyond equity * max_leverage must be refused, not booked."""
-    # One position is ~630 notional; a 0.1x cap (=$200) cannot fund it.
-    cfg = costs.CostConfig(max_leverage=0.1)
+def test_fixture_8_a_single_trade_can_never_be_unfundable_after_3R():
+    """UPDATED at 3R, and it is a RESULT rather than a weakened test.
+
+    The derived floor carries a leverage term risk_usd/(E*L_max), so when that
+    term binds the stop is exactly wide enough that
+
+        notional = risk_usd * P / (P*stop_pct + costs) < risk_usd / stop_pct
+                 = risk_usd / (risk_usd/(E*L_max)) = E * L_max
+
+    i.e. strictly below the margin cap, by construction. A SINGLE trade can
+    therefore no longer be refused for margin at any leverage. This is what A2
+    said the leverage term was for; the old fixture (0.1x cap refusing one
+    ~630-notional trade) is unreachable because lowering max_leverage now also
+    widens the floor and shrinks the position.
+
+    Margin refusal survives only for CONCURRENT positions -- see the next test.
+    """
     df15 = bars15(60)
     all_min = make_1m(T0, [ENTRY_BAR] + flat(1000))
     signals = sig_frame([sig("ETHUSDT", "long", T0 + BAR * 5)])
-    trades, refused, _ = simulate.run_backtest(
-        signals, {"ETHUSDT": df15}, {"ETHUSDT": all_min}, cfg,
-        {"ETHUSDT": ConstTick(TICK)})
-    assert len(trades) == 0
-    assert refused["insufficient_margin"] == 1
+    for lev in (3.0, 0.65, 0.1, 0.02):
+        cfg = make_cfg(max_leverage=lev)
+        trades, refused, _ = simulate.run_backtest(
+            signals, {"ETHUSDT": df15}, {"ETHUSDT": all_min}, cfg,
+            {"ETHUSDT": ConstTick(TICK)})
+        assert refused["insufficient_margin"] == 0, f"refused at {lev}x"
+        assert len(trades) == 1
+        assert trades.iloc[0]["notional"] <= cfg.equity_usd * cfg.max_leverage
 
 
 def test_concurrent_positions_respect_the_leverage_cap():
     """Three symbols signalling together: the cap must bind on the third."""
-    cfg = costs.CostConfig(equity_usd=2000.0, max_leverage=0.65)  # cap $1300
+    cfg = make_cfg(equity_usd=2000.0, max_leverage=0.65)  # cap $1300
     syms = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
     df15 = {s: bars15(60) for s in syms}
     mins = {s: make_1m(T0, [ENTRY_BAR] + flat(1000)) for s in syms}
@@ -161,7 +188,7 @@ def test_concurrent_positions_respect_the_leverage_cap():
 
 
 def test_one_position_per_symbol_no_pyramiding():
-    cfg = costs.CostConfig()
+    cfg = make_cfg()
     df15 = bars15(60)
     all_min = make_1m(T0, [ENTRY_BAR] + flat(1000))
     # Two signals only 2 bars apart -- the first trade is still open.

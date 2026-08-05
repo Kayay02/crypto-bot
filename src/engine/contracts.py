@@ -61,8 +61,39 @@ class TickSchedule:
                 "segments": [[t, v] for t, v in self.segments]}
 
 
+class OrderSpec:
+    """Exchange minimum-order constraints for one symbol.
+
+    Two separate limits, both of which the exchange enforces:
+      min_trade_num  -- minimum quantity, in base units
+      min_trade_usdt -- minimum notional, in USDT
+    plus qty_step, the quantity grid (sizeMultiplier / volumePlace).
+
+    SAME CAVEAT AS THE TICK SCHEDULE: Bitget reports the CURRENT contract state
+    only, so these are today's values and the historical series is not
+    recoverable from the API. Unlike the tick, they cannot be reconstructed by
+    grid-validating prices either -- the derived layer holds no order sizes. So
+    they are recorded as current-state facts, NOT as a schedule over time.
+    """
+
+    def __init__(self, symbol, min_trade_num, min_trade_usdt, qty_step):
+        self.symbol = symbol
+        self.min_trade_num = float(min_trade_num)
+        self.min_trade_usdt = float(min_trade_usdt)
+        self.qty_step = float(qty_step)
+
+    def to_json(self):
+        return {"min_trade_num": self.min_trade_num,
+                "min_trade_usdt": self.min_trade_usdt,
+                "qty_step": self.qty_step}
+
+    def __repr__(self):
+        return (f"OrderSpec({self.symbol}, min_qty={self.min_trade_num}, "
+                f"min_usdt={self.min_trade_usdt}, step={self.qty_step})")
+
+
 def probe_contracts(timeout=30):
-    """Live probe. Returns {symbol: {"tick", "pricePlace", "priceEndStep"}}."""
+    """Live probe. Returns {symbol: {tick, pricePlace, priceEndStep, order}}."""
     import requests
     r = requests.get(CONTRACTS_URL, params={"productType": PRODUCT_TYPE},
                      timeout=timeout)
@@ -78,6 +109,8 @@ def probe_contracts(timeout=30):
             "tick": step * (10 ** -place),
             "pricePlace": place,
             "priceEndStep": step,
+            "order": OrderSpec(c["symbol"], c["minTradeNum"], c["minTradeUSDT"],
+                               c["sizeMultiplier"]),
         }
     return out
 
@@ -90,6 +123,21 @@ def load_cache(path=CACHE_PATH):
     raw = json.load(open(path))
     return {s: TickSchedule(s, v["segments"])
             for s, v in raw["symbols"].items()}
+
+
+def load_order_specs(path=CACHE_PATH):
+    """Load the cached minimum-order constraints. {} if the cache predates them."""
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"contracts cache missing at {path}; run contracts.py to build it")
+    raw = json.load(open(path))
+    out = {}
+    for s, v in raw["symbols"].items():
+        o = v.get("order")
+        if o:
+            out[s] = OrderSpec(s, o["min_trade_num"], o["min_trade_usdt"],
+                               o["qty_step"])
+    return out
 
 
 # Two SOLUSDT 15m prices carry 4 decimals after the 2024-08-14 move to a 0.001
@@ -166,14 +214,25 @@ if __name__ == "__main__":
                 print("  UNEXPECTED", r)
         raise SystemExit("tick schedule does not match historical prices")
 
+    print("minimum-order constraints (CURRENT state; no history available):")
+    for s in ("BTCUSDT", "ETHUSDT", "SOLUSDT"):
+        print(f"  {s}: {live[s]['order']}")
+
     os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
+    payload = {s: sch.to_json() for s, sch in schedules.items()}
+    for s in payload:
+        payload[s]["order"] = live[s]["order"].to_json()
     with open(CACHE_PATH, "w") as fh:
         json.dump({
             "source": CONTRACTS_URL,
             "product_type": PRODUCT_TYPE,
             "note": "tick = priceEndStep * 10**-pricePlace; historical "
-                    "segments derived empirically from derived layer",
-            "symbols": {s: sch.to_json() for s, sch in schedules.items()},
+                    "segments derived empirically from derived layer. "
+                    "`order` holds CURRENT minimum-order constraints "
+                    "(minTradeNum / minTradeUSDT / sizeMultiplier); unlike the "
+                    "tick these have no recoverable history and are not a "
+                    "schedule over time.",
+            "symbols": payload,
         }, fh, indent=2, sort_keys=True)
         fh.write("\n")
     print(f"cache written: {CACHE_PATH}")

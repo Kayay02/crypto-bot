@@ -10,7 +10,7 @@ so a stop-out must lose exactly 1R and a target fill must make exactly 2R.
 import costs
 import pytest
 import simulate
-from conftest import make_1m, make_signal
+from conftest import make_1m, make_cfg, make_signal
 
 SIG_TS = 1_600_000_000_000              # a 15m boundary
 ENTRY_TS = SIG_TS + simulate.BAR_15M_MS
@@ -19,7 +19,7 @@ TICK = 0.01
 
 def run(bars, direction="long", atr=2.0, cfg=None, symbol="ETHUSDT",
         trace=False):
-    cfg = cfg or costs.CostConfig()
+    cfg = cfg or make_cfg()
     sig = make_signal(symbol=symbol, direction=direction, sig_ts=SIG_TS, atr=atr)
     tr = simulate.Trace(enabled=trace)
     t = simulate.simulate_trade(sig, make_1m(ENTRY_TS, bars), cfg, TICK, trace=tr)
@@ -113,25 +113,32 @@ def test_fixture_5b_shallow_breach_is_normal_quality():
 
 
 def test_fixture_6_time_stop_when_1R_never_reached():
-    cfg = costs.CostConfig()
+    cfg = make_cfg()
     # Flat drift that never touches +1R net or the stop (97.00).
     bars = [ENTRY_BAR] + flat(simulate.max_walk_minutes(cfg) - 1, price=100.0)
     t, _ = run(bars)
     assert t["exit_reason"] == "time_stop"
-    assert t["reached_1r"] is False
-    # Decision at the close of bar 16, execution on the first minute of bar 17
-    # -- mirroring the entry convention.
-    assert t["exit_ts"] == SIG_TS + simulate.BAR_15M_MS * (cfg.time_stop_bars + 1)
-    assert t["bars_held"] == cfg.time_stop_bars
+    assert t["at_threshold_at_checkpoint"] is False
+    # Decision at the close of the bar `time_stop_bars` after ENTRY; execution
+    # on the first minute of the next 15m bar -- mirroring the entry convention.
+    assert t["exit_ts"] == ENTRY_TS + simulate.BAR_15M_MS * (cfg.time_stop_bars + 1)
+    assert t["bars_held"] == cfg.time_stop_bars + 1
 
 
-def test_fixture_6b_no_time_stop_once_1R_reached():
-    """+1R net touched intrabar suppresses the time stop; max_hold caps it."""
-    cfg = costs.CostConfig()
-    bars = ([ENTRY_BAR, (104.50, 99.9, 103.0)]
-            + flat(simulate.max_walk_minutes(cfg) - 2, price=101.0))
+def test_fixture_6b_no_time_stop_when_held_above_threshold():
+    """UPDATED at 3R: the trade must HOLD above threshold at the checkpoint.
+
+    Previously this fixture touched +1R once and drifted back to 101.0, and the
+    LATCH let it survive. Under the state check it is the checkpoint close that
+    decides, so the fixture now holds the price above the threshold.
+    """
+    cfg = make_cfg()
+    q = costs.position_size(100.0, 97.0, "long", cfg, "ETHUSDT")
+    r1 = costs.solve_r_level(100.0, q, "long", cfg, TICK)
+    above = round(r1 + 0.50, 2)
+    bars = [ENTRY_BAR] + flat(simulate.max_walk_minutes(cfg) - 1, price=above)
     t, _ = run(bars)
-    assert t["reached_1r"] is True
+    assert t["at_threshold_at_checkpoint"] is True
     assert t["exit_reason"] != "time_stop"
     assert t["exit_reason"] == "max_hold"
 

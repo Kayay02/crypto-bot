@@ -36,10 +36,19 @@ def run(symbols=SYMBOLS, start_ts=None, end_ts=None, params=None, cfg=None,
     run ONCE over the full ungated universe and the gated arm is obtained by
     filtering the resulting table on rvol (see gated_arm), guaranteeing the two
     arms are the identical universe by construction.
+
+    `cfg` is REQUIRED. There is no default CostConfig because four of its
+    parameters have no default (Point 3R): the engine must not be runnable
+    against a stale placeholder.
     """
     params = params or sg.SignalParams()
-    cfg = cfg or costs.CostConfig()
+    if cfg is None:
+        raise ValueError(
+            "run() requires an explicit CostConfig: stop_atr_mult, "
+            "stop_max_pct, rvol_threshold and baseline_days have no defaults. "
+            "Choosing them is a Point 4 sweep decision.")
     ticks = contracts.load_cache()
+    order_specs = contracts.load_order_specs()
 
     bars15, bars1m, sigs = {}, {}, []
     for sym in symbols:
@@ -54,7 +63,7 @@ def run(symbols=SYMBOLS, start_ts=None, end_ts=None, params=None, cfg=None,
         # +1 year so a trade opened near a year boundary can still walk forward.
         bars1m[sym] = simulate.load_1m(derived, sym,
                                        years=set(years) | {max(years) + 1})
-        s = sg.generate_signals(df, params, sym,
+        s = sg.generate_signals(df, params, sym, cfg,
                                 apply_rvol_gate=(variant == "gated"))
         if len(s):
             sigs.append(s)
@@ -62,27 +71,28 @@ def run(symbols=SYMBOLS, start_ts=None, end_ts=None, params=None, cfg=None,
     if not sigs:
         empty = pd.DataFrame()
         return empty, {"open_position": 0, "cooldown": 0,
-                       "insufficient_margin": 0, "no_1m_coverage": 0}, {}
+                       "insufficient_margin": 0, "no_1m_coverage": 0,
+                       "min_qty": 0}, {}
 
     allsig = pd.concat(sigs, ignore_index=True)
     trades, refused, traces = simulate.run_backtest(
         allsig, bars15, bars1m, cfg, ticks,
         donchian_period=params.donchian, trace_signal_ts=trace_signal_ts,
-        mode=mode)
+        mode=mode, order_specs=order_specs)
     trades = simulate.attach_flag_overlap(
         trades, os.path.join(derived, "flags",
                              "reconstruction_divergence.parquet"))
     return trades, refused, traces
 
 
-def gated_arm(trades, rvol_min):
+def gated_arm(trades, rvol_threshold):
     """The gated arm, obtained by FILTERING the ungated trade table.
 
     Not a second simulation. Partitioning one table guarantees both arms are
     the identical universe by construction, and lets the RVOL threshold be
     swept later at zero additional simulation cost.
     """
-    return trades[trades["rvol"] >= rvol_min].reset_index(drop=True)
+    return trades[trades["rvol"] >= rvol_threshold].reset_index(drop=True)
 
 
 def canonical_bytes(trades, ndigits=10):
@@ -115,11 +125,26 @@ def main():
     ap.add_argument("--out", default=None, help="write trades CSV here")
     ap.add_argument("--summary", action="store_true",
                     help="print provenance counters (never performance)")
+    # No defaults, deliberately: argparse `required=True` mirrors the config
+    # contract so the CLI cannot run against a stale placeholder either.
+    ap.add_argument("--stop-atr-mult", type=float, required=True)
+    ap.add_argument("--stop-max-pct", type=float, required=True)
+    ap.add_argument("--rvol-threshold", type=float, required=True)
+    ap.add_argument("--baseline-days", type=int, required=True)
+    ap.add_argument("--tau", type=float, default=1.0)
+    ap.add_argument("--phi", type=float, default=1.0)
+    ap.add_argument("--no-time-stop", action="store_true",
+                    help="NO_TIME_STOP counterfactual arm (D1). Not baseline.")
     a = ap.parse_args()
+
+    cfg = costs.CostConfig(
+        stop_atr_mult=a.stop_atr_mult, stop_max_pct=a.stop_max_pct,
+        rvol_threshold=a.rvol_threshold, baseline_days=a.baseline_days,
+        tau=a.tau, phi=a.phi, time_stop_enabled=not a.no_time_stop)
 
     trades, refused, traces = run(
         symbols=a.symbols, start_ts=a.start, end_ts=a.end, variant=a.variant,
-        trace_signal_ts=a.trace_signal_ts, mode=a.mode)
+        trace_signal_ts=a.trace_signal_ts, mode=a.mode, cfg=cfg)
 
     if a.trace_signal_ts is not None:
         for ts, txt in traces.items():

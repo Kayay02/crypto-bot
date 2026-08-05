@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.join(ROOT, "src"))
 
 from analysis import structural_pass as sp  # noqa: E402
 import signals  # noqa: E402  (conftest puts src/engine on the path)
+from conftest import make_cfg  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +231,7 @@ def test_breakout_masks_match_the_engine_conditions():
     """Rebuild the engine's trend+Donchian terms independently and compare."""
     bars = make_bars(3000, seed=7)
     params = signals.SignalParams()
-    ind = signals.compute_indicators(bars, params)
+    ind = signals.compute_indicators(bars, params, sp._UNUSED_BASELINE_DAYS)
     up, lo = signals.donchian_prior(bars["high"].to_numpy(),
                                     bars["low"].to_numpy(), params.donchian)
     close = bars["close"].to_numpy()
@@ -252,11 +253,14 @@ def test_every_engine_signal_bar_is_a_breakout_bar():
     signal bar were ever missing from it, the trend/Donchian terms disagree.
     """
     # Volume must vary or RVOL is identically 1.0 and the engine emits nothing.
+    # Sized in whole days: the session baseline needs completed prior days.
     rng = np.random.default_rng(23)
-    n = 4000
+    baseline_days = 3
+    n = signals.SLOTS_PER_DAY * 12
     bars = make_bars(n, vol=rng.lognormal(7.0, 0.8, n), seed=11)
     params = signals.SignalParams()
-    sig = signals.generate_signals(bars, params, "ETHUSDT")
+    cfg = make_cfg(baseline_days=baseline_days, rvol_threshold=1.5)
+    sig = signals.generate_signals(bars, params, "ETHUSDT", cfg)
     if sig.empty:
         pytest.skip("fixture produced no engine signals")
 
@@ -270,11 +274,17 @@ def test_every_engine_signal_bar_is_a_breakout_bar():
 
 
 def test_breakout_definition_excludes_rvol_and_rsi():
-    """Changing the RVOL/RSI knobs must not move the breakout population."""
+    """Changing the RSI period must not move the breakout population.
+
+    UPDATED at 3R: rvol_min and rsi_long_lo no longer exist on SignalParams --
+    the RVOL threshold moved to CostConfig and the RSI band was deleted
+    outright. The invariant under test is unchanged: the breakout population is
+    trend + Donchian only.
+    """
     bars = make_bars(3000, seed=5)
     a = sp.breakout_masks(sp.bar_frame(bars, signals.SignalParams()))
     b = sp.breakout_masks(sp.bar_frame(
-        bars, signals.SignalParams(rvol_min=99.0, rsi_long_lo=99.0)))
+        bars, signals.SignalParams(rsi_period=2)))
     assert np.array_equal(a[0], b[0]) and np.array_equal(a[1], b[1])
 
 
