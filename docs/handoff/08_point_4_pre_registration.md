@@ -793,3 +793,148 @@ the stop_atr_mult grid.
 
 The 30-day extremes are NOT where the sweep will run. Recorded so the report's
 figures are not misread as the sweep range.
+
+---
+
+## APPENDIX F — AMENDMENT 5: m* POPULATION, AND A3 BEFORE THE SWEEP
+
+Made pre-lift. No performance figure seen.
+
+F.1 — SWEEP-ANCHOR m* POPULATION.
+§4.3 specifies m* "computed per training fold (A6)" without naming the
+population. It is hereby defined as: median ATR% over BREAKOUT BARS in the
+training fold — bars passing Donchian-20 and the EMA20/EMA50 filter, BEFORE the
+RVOL gate.
+
+Rationale. The argument for searching upward from m* is that the floor binds on
+half the population at m* by construction. That holds only if the population
+defining the median is the population A3 measures binding over — which is the
+traded population, not all bars. Breakout bars are intrinsically higher
+volatility than the unconditional distribution, so an all-bars m* would sit
+above the relevant one and the construction would not hold.
+
+Gated signal bars were rejected: they depend on rvol_threshold, which is itself
+selected per fold, so anchoring the grid to them would make the grid depend on a
+quantity the grid exists to help select. Breakout bars depend only on fixed
+components.
+
+This also fixes the population for stop_max_pct, which §4.3 derives from
+"fold-median ATR%" — the same median, same population.
+
+F.2 — A3 IS COMPUTED BEFORE THE SWEEP.
+The nine-step sequence in §4.4 places A3 at step 5. A3 requires no trade
+outcome: floor binding is determined at entry from ATR at the signal bar, and
+binding rates are on the firewall's allowed list.
+
+A3 is therefore computed across the full grid — all folds, all symbols, all
+eleven multipliers — BEFORE the firewall lifts, and grid points failing A3 are
+excluded before any simulation runs.
+
+The revised sequence:
+  0. Grid definition and A3 pre-screen  [PRE-LIFT]
+  1. E6 sigma measurement                [THE LIFT]
+  2. Sweep, A3-surviving grid points only
+  3-9. Unchanged.
+
+The outcome is unchanged: a grid point failing A3 fails acceptance whenever it
+is checked. What changes is that the tradability finding — the pre-registered
+most likely outcome of Point 4 — is available without spending the firewall.
+The non-revisitability rule still binds: step 0 is not rerun with a different
+range if it eliminates a symbol. §4.3's "the range is NOT extended upward to
+rescue a failing A3" applies with full force at step 0.
+
+CLARIFICATION ON "NO PARTIAL LIFT". §4.4 states "nothing in 4.3 or 4.4 executes
+until 4.5 is closed and committed. There is no partial lift." Both conditions
+are satisfied: 4.5 is closed and committed, and step 0 is not a partial lift.
+"No partial lift" forbids inspecting SOME performance figures while withholding
+others. Step 0 inspects NONE — floor and cap binding are entry-time structural
+properties on the firewall's allowed list, computed without running Layer B or
+importing simulate. The firewall lifts at step 1 and not before.
+
+---
+
+## APPENDIX G — TWO FINDINGS FROM 4.2, RECORDED WITHOUT RULE CHANGE
+
+G.1 — PER-FOLD CONCORDANCE IS UNSTABLE.
+§4.4 says the concordance measurement "moderates interpretation rather than
+changing the rule", written when only a whole-period figure existed. Per fold,
+m* concordance ranges 0.159 to 0.661 against a whole-period 0.4544 — a spread
+wider than the value itself. Efficiency ranges 0.189 to 0.530.
+
+The degree of independence underpinning two-of-three therefore varies roughly
+fourfold across folds. A verdict driven by high-concordance folds represents
+materially less independent evidence than one driven by low-concordance folds,
+and the aggregate cannot distinguish them. The two-of-three rule is UNCHANGED.
+This is recorded so the per-fold figures are on the table when the verdict is
+read. Full table in reports/10_fold_architecture.md.
+
+G.2 — §4.2's "REQUIRED TEST" IS THE WEAKER OF TWO.
+§4.2 states: "Required test: no trade may originate from a bar inside the
+buffer. This is a test, not a hope." As implemented anywhere that slices signals
+to the train window, that check CANNOT FAIL — it is a hope in the shape of a
+test.
+
+What establishes sufficiency is the pair: indicators computed with a 45-day
+buffer must be BIT-IDENTICAL to those computed with a 90-day buffer from
+train_start onward, AND a deliberately shortened buffer must be DETECTED as
+differing. Both are implemented (report 10 §3). §4.2's requirement is satisfied
+by the pair, not by the literal check alone.
+
+Measured: 25 days suffices for every strategy indicator; the binding component
+is the 20-day RVOL slot baseline, not EMA50. The 45-day buffer carries ~20 days
+of measured headroom. No change — the buffer costs nothing.
+
+---
+
+## APPENDIX H — AMENDMENT 6: stop_max_pct DERIVATION CORRECTED
+
+Made pre-lift. No performance figure seen.
+
+DEFECT. §4.3 derives the cap as (m* + 2.5) x fold-median ATR%. The top grid
+point is stop_atr_mult = m* + 2.5. At that point the cap binds whenever
+ATR%(t) > median(ATR%) — exactly 50% of breakout bars by definition of the
+median, made exact by Appendix F.1 fixing both quantities to the same
+population.
+
+A cap binding on half of all trades is not a guard rail; it is a second stop
+rule. §4.3 requires it to be "inert under normal conditions... active only in
+genuine volatility spikes". At high multipliers it would flatten the sweep
+artificially, and the plateau test would read that flatness as stability. A3
+measures FLOOR binding only, so nothing would catch it.
+
+MEASURED, not argued. Cap binding at the top grid point, over training-fold
+breakout bars, sampled across folds 1, 2, 3, 5, 9 and all three symbols:
+  committed median form: 49.9% - 50.0%
+  P95 form (this amendment): 5.0% - 5.1%
+P95/median ratio runs 1.96 - 2.58.
+
+CORRECTION. stop_max_pct = (m* + 2.5) x P95(ATR%) over breakout bars in the
+training fold, per fold per symbol.
+
+The cap then binds on 5% of breakout bars at the widest grid point and less at
+every point below. This is a structural pass-rate criterion — the same pattern
+already accepted for rvol_threshold: a round pre-committed number selected on
+structure, never on performance.
+
+§4.3's rejection of percentile anchoring ("introduces a new free number") is
+WITHDRAWN. The alternative chosen in its place has a worse defect than the one
+it avoided.
+
+WHY THE ORIGINAL REJECTION WAS WRONG. §4.3 rejected percentile anchoring
+because it "introduces a new free number". That reasoning does not survive: the
+formula already contains m*+2.5, and 95 is no more free than 2.5 is. Both are
+round pre-committed constants. The rejection traded an imagined cost for a real
+defect — a cap that binds on half of all trades at the top of the searched
+range, defeating its own stated purpose.
+
+STATED TENSION. This is closer to ATR guarding ATR than the guard-rail
+principle prefers. The principle's stated failure mode is "always inert or
+always binding, never conditionally binding", and rsi_upper failed because
+filter and signal moved together perfectly. Instantaneous ATR and a fold-level
+ATR percentile do not move together, so the cap fires conditionally on genuine
+within-fold spikes. The tension is recorded rather than argued away.
+
+CAP BINDING RATE IS NOW A REPORTED DIAGNOSTIC at every grid point, alongside
+floor binding. It carries no acceptance threshold — A3 remains a floor-binding
+criterion only — but a cap binding materially above 5% at any grid point is a
+finding about this derivation and must be reported.
