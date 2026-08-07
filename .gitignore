@@ -19,3 +19,7 @@ __pycache__/
 !/data/derived/regime/
 /data/derived/regime/*
 !/data/derived/regime/terciles.json
+# _manifest.json records row counts, per-column NaN counts, the config and the
+# git hash -- what was produced, alongside terciles.json's what was frozen. Same
+# provability argument, ~1.7 KB. The parquet outputs (9.8 MB) stay ignored.
+!/data/derived/regime/_manifest.json

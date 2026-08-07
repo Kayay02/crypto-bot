@@ -1,0 +1,63 @@
+{
+  "compression": "zstd:3",
+  "config": {
+    "atr_period": 14,
+    "bars_per_day": 96,
+    "ema_fast": 20,
+    "ema_slow": 50,
+    "stop_min_pct": {
+      "BTCUSDT": 0.010199999999999999,
+      "ETHUSDT": 0.010199999999999999,
+      "SOLUSDT": 0.013199999999999998
+    }
+  },
+  "fit_end_utc_exclusive": "2025-01-01T00:00:00Z",
+  "fit_start_utc": "2022-01-01T00:00:00Z",
+  "git_commit": "7a326106f37da843ea982239b371b7e9f65e0fa2",
+  "holdout_start_utc": "2025-01-01T00:00:00Z",
+  "outputs": {
+    "data/derived/regime/BTCUSDT.parquet": {
+      "bytes": 3220624,
+      "first_ts": 1640995200000,
+      "last_ts": 1735688700000,
+      "nan_rows": {
+        "drift_log_return": 2974,
+        "efficiency_ratio": 2974,
+        "ema_fraction": 2974,
+        "m_star": 2974,
+        "median_daily_quote_volume": 2974
+      },
+      "rows": 105216
+    },
+    "data/derived/regime/ETHUSDT.parquet": {
+      "bytes": 3270194,
+      "first_ts": 1640995200000,
+      "last_ts": 1735688700000,
+      "nan_rows": {
+        "drift_log_return": 2974,
+        "efficiency_ratio": 2974,
+        "ema_fraction": 2974,
+        "m_star": 2974,
+        "median_daily_quote_volume": 2974
+      },
+      "rows": 105216
+    },
+    "data/derived/regime/SOLUSDT.parquet": {
+      "bytes": 3344057,
+      "first_ts": 1640995200000,
+      "last_ts": 1735688700000,
+      "nan_rows": {
+        "drift_log_return": 2974,
+        "efficiency_ratio": 2974,
+        "ema_fraction": 2974,
+        "m_star": 2974,
+        "median_daily_quote_volume": 2974
+      },
+      "rows": 105216
+    }
+  },
+  "run_utc": "2026-08-07T12:06:47Z",
+  "script": "src/regime/labels.py:build",
+  "warmup_bars": 2974,
+  "window_days": 30
+}
