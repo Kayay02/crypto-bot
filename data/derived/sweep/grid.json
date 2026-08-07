@@ -8,7 +8,7 @@
     "rvol_thresholds": "pass rates (0.3, 0.5, 0.7) on breakout bars; baseline_days fixed at 20 (\u00a74.3)",
     "stop_max_pct": "(m* + 2.5) x P95(ATR%) over the same population (Appendix H / Amendment 6, superseding the median form)"
   },
-  "git_commit": "fcd25c578554b570a67330d2c5120f5847d2fb99-dirty",
+  "git_commit": "3d04c00663af8098a4fe0740d4d31d52d828d169",
   "prescreen": {
     "BTCUSDT": {
       "folds": {
