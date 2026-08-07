@@ -1,0 +1,57 @@
+{
+  "cuts": {
+    "BTCUSDT|efficiency_ratio|30d": {
+      "axis": "efficiency_ratio",
+      "cut_high": 0.030204867883854233,
+      "cut_low": 0.013046435186685178,
+      "n_fitted": 102242,
+      "symbol": "BTCUSDT",
+      "window_days": 30
+    },
+    "BTCUSDT|m_star|30d": {
+      "axis": "m_star",
+      "cut_high": 3.6686901269126606,
+      "cut_low": 2.844052345809782,
+      "n_fitted": 102242,
+      "symbol": "BTCUSDT",
+      "window_days": 30
+    },
+    "ETHUSDT|efficiency_ratio|30d": {
+      "axis": "efficiency_ratio",
+      "cut_high": 0.028796782699463862,
+      "cut_low": 0.012001156029406648,
+      "n_fitted": 102242,
+      "symbol": "ETHUSDT",
+      "window_days": 30
+    },
+    "ETHUSDT|m_star|30d": {
+      "axis": "m_star",
+      "cut_high": 3.0185477070054185,
+      "cut_low": 2.267265537075383,
+      "n_fitted": 102242,
+      "symbol": "ETHUSDT",
+      "window_days": 30
+    },
+    "SOLUSDT|efficiency_ratio|30d": {
+      "axis": "efficiency_ratio",
+      "cut_high": 0.027057767405220364,
+      "cut_low": 0.013761943561842906,
+      "n_fitted": 102242,
+      "symbol": "SOLUSDT",
+      "window_days": 30
+    },
+    "SOLUSDT|m_star|30d": {
+      "axis": "m_star",
+      "cut_high": 2.2418235410485665,
+      "cut_low": 1.8119167460014272,
+      "n_fitted": 102242,
+      "symbol": "SOLUSDT",
+      "window_days": 30
+    }
+  },
+  "fit_end_ms": 1735689600000,
+  "fit_end_utc_exclusive": "2025-01-01T00:00:00Z",
+  "fit_start_ms": 1640995200000,
+  "fit_start_utc": "2022-01-01T00:00:00Z",
+  "git_commit": "7a326106f37da843ea982239b371b7e9f65e0fa2"
+}

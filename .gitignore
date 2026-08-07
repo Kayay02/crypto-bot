@@ -6,3 +6,16 @@ __pycache__/
 .DS_Store
 .claude/
 .pytest_cache/
+
+# The frozen tercile cuts are a PRE-REGISTRATION artifact: their entire value is
+# that a commit proves they predate the data they are applied to. A frozen file
+# that can be deleted and silently refitted is only weakly frozen, so this one
+# specific file is tracked. Everything else under /data/ stays ignored.
+# The parent directories must be unignored first or the negation cannot match.
+!/data/
+/data/*
+!/data/derived/
+/data/derived/*
+!/data/derived/regime/
+/data/derived/regime/*
+!/data/derived/regime/terciles.json

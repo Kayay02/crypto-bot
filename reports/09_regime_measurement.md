@@ -21,7 +21,7 @@ tests/
   test_regime_measure.py     502 lines   37 tests — fixtures with known answers
   test_regime_causality.py   284 lines   13 tests — mutation tests, truncation, firewall
 
-data/derived/regime/          (gitignored, per repo convention — see §8.3)
+data/derived/regime/          (parquet gitignored per repo convention; terciles.json TRACKED — §8.3)
   BTCUSDT.parquet   105,216 rows   3,220,624 bytes   zstd:3
   ETHUSDT.parquet   105,216 rows   3,270,194 bytes   zstd:3
   SOLUSDT.parquet   105,216 rows   3,344,057 bytes   zstd:3
@@ -96,7 +96,39 @@ The ordering matches expectation from the derived floors and each symbol's volat
 | ETHUSDT | 0.0000 | 0.0193 | 0.0938 |
 | SOLUSDT | 0.0000 | 0.0196 | 0.0967 |
 
-**These values are much smaller than an efficiency ratio usually looks, and the reason is structural rather than a bug — see §8.1.** Over a 2,880-bar window a random walk accumulates net displacement of order √N against N total movement, so the ratio floors near `√(2/πN)` ≈ 0.0149. The observed medians (0.019–0.021) sit about 1.3× that floor, i.e. these markets are modestly more directional than a random walk. The axis still discriminates — the max is 5× the median — but "high efficiency" here means 0.03, not 0.6.
+**These values are much smaller than an efficiency ratio usually looks, and the reason is structural rather than a bug — see §8.1.** Over a 2,880-bar window a random walk accumulates net displacement of order √N against N total movement, so the ratio floors at **1/√N ≈ 0.01863**. The observed medians (0.019–0.021) sit at about **1.03–1.12×** that floor — these markets are only marginally more directional than a random walk at this window. The axis still discriminates (the max is 5× the median), but "high efficiency" here means 0.03, not 0.6.
+
+> **Correction (rerun pass, `reports/09a_regime_rerun.md` §4).** This paragraph originally gave the floor as `√(2/πN)` ≈ 0.0149 and the observed medians as "about 1.3×" it. That was wrong: the mean-absolute-deviation factor √(2/π) appears in the numerator *and* the denominator and cancels, so the floor is 1/√N, not √(2/πN). The corrected floor is **higher**, which makes the excess over it **smaller** — 1.12× rather than 1.3× for BTC at 30 days. The direction of the original finding is unchanged; its magnitude was overstated.
+
+### Reported covariates per symbol (30-day window, uncut)
+
+These are reported, never bucketed — no cut points and no labels.
+
+**drift_log_return** — signed log return over the window:
+
+| symbol | min | median | max |
+|---|---|---|---|
+| BTCUSDT | −0.5313 | +0.0193 | +0.4801 |
+| ETHUSDT | −0.8032 | +0.0008 | +0.6119 |
+| SOLUSDT | −1.2335 | −0.0042 | +1.0857 |
+
+**ema_fraction** — fraction of window bars with EMA20 > EMA50:
+
+| symbol | min | median | max |
+|---|---|---|---|
+| BTCUSDT | 0.3625 | 0.5132 | 0.6826 |
+| ETHUSDT | 0.3625 | 0.5010 | 0.7222 |
+| SOLUSDT | 0.3424 | 0.4854 | 0.7024 |
+
+**median_daily_quote_volume** — USDT, median trailing-24h quote volume over the window (§8.5):
+
+| symbol | min | median | max |
+|---|---|---|---|
+| BTCUSDT | 1,873,007,933 | 5,236,398,318 | 17,541,391,350 |
+| ETHUSDT | 411,734,654 | 1,797,435,227 | 8,364,225,347 |
+| SOLUSDT | 18,669,136 | 44,038,683 | 605,927,106 |
+
+Three observations, all descriptive. The drift medians are near zero on every symbol, so the 2022-2024 fit window is not dominated by a single directional era — SOL's median is in fact slightly negative despite its range being the widest. `ema_fraction` medians sit near 0.50 with a floor around 0.34 and a ceiling around 0.72, so the strategy's own trend filter is roughly balanced over the window and never collapses to always-on or always-off. Liquidity spans an order of magnitude within each symbol and roughly two orders of magnitude between BTC and SOL, which matters for slippage realism rather than for the gate (§4.1: the RVOL gate is session-normalised over trailing days and so self-normalises to level).
 
 ### Fitted tercile cuts (frozen, fit window 2022-01-01 → 2025-01-01 exclusive)
 
@@ -185,17 +217,53 @@ Exact-zero efficiency values, which are legitimate (a window returning exactly t
 
 **The m\* median is remarkably stable across windows** (BTC 3.224 → 3.236 → 3.264) while the range contracts as the window lengthens — exactly what averaging more data should do. The axis's central tendency is not a window artifact.
 
-**The efficiency median moves with window length** (0.027 → 0.021 → 0.017 for BTC), tracking the √N random-walk floor (0.0218 → 0.0149 → 0.0105). This is the compression effect of §8.1 and is the reason the tercile cuts are not transferable between window lengths. Only 30-day cuts are frozen; measuring at 14 or 60 requires its own fit, and the artifact keys cuts by window length so the two cannot be confused.
+**The efficiency median moves with window length** (0.027 → 0.021 → 0.017 for BTC), tracking the 1/√N random-walk floor (**0.02728 → 0.01863 → 0.01318**). This is the compression effect of §8.1 and is the reason the tercile cuts are not transferable between window lengths. Only 30-day cuts are frozen; measuring at 14 or 60 requires its own fit, and the artifact keys cuts by window length so the two cannot be confused.
 
 ---
 
 ## 8. Judgment calls where the specification was ambiguous
 
-**8.1 — "Kaufman efficiency ratio" over 2,880 bars is dominated by the √N floor.** The formula was specified exactly and I implemented it exactly. But the resulting values live in 0.00–0.11 rather than the 0–1 range the "bounded 0-1" description suggests, because net displacement grows as √N while total path length grows as N. This is not a defect and I did not "fix" it — rescaling would break the exact fixture answers (ramp = 1.0, zigzag = 0.0) that make the implementation verifiable. It does mean **the axis is a relative discriminator, not an absolute one**: a "high efficiency" 30-day window means ER > 0.030, which is a mild trend, not a strong one. Anyone reading a post-lift stratification as "the strategy works in efficient markets" should know that "efficient" here means "the top third of a distribution whose median is 1.3× a random walk". Flagged, not resolved.
+**8.1 — "Kaufman efficiency ratio" over 2,880 bars is dominated by the 1/√N floor.** The formula was specified exactly and I implemented it exactly. But the resulting values live in 0.00–0.11 rather than the 0–1 range the "bounded 0-1" description suggests, because net displacement grows as √N while total path length grows as N. This is not a defect and I did not "fix" it — rescaling would break the exact fixture answers (ramp = 1.0, zigzag = 0.0) that make the implementation verifiable.
+
+For a driftless random walk the ratio floors at
+
+    denominator:  N · E|Δ|   = N · σ · √(2/π)
+    numerator:    E|S_N|     = σ · √N · √(2/π)
+    ratio                    = 1/√N
+
+The √(2/π) mean-absolute-deviation factor cancels. Floors: **0.02728 at 14 days, 0.01863 at 30 days, 0.01318 at 60 days.**
+
+Observed medians against those floors:
+
+| symbol | 14d | 30d | 60d |
+|---|---|---|---|
+| BTCUSDT | **0.98** | 1.12 | 1.29 |
+| ETHUSDT | 1.08 | 1.03 | 1.19 |
+| SOLUSDT | 0.95 | 1.05 | 0.92 |
+
+Two things follow, and both are description only.
+
+**At 14 days BTC's observed median (0.0267) sits marginally BELOW the random-walk floor (0.02728), at 0.98×.** SOL is below at 14 and 60 days. A sub-floor reading is not anomalous — the floor is an asymptotic expectation, individual windows scatter around it, and mean reversion at short horizons pushes below it — but it does mean that at 14 days these series are, on this measure, not distinguishable from chance at all.
+
+**For BTC the ratio rises monotonically with window length (0.98 → 1.12 → 1.29).** ETH and SOL do **not**: ETH dips at 30 days, SOL peaks at 30 and falls below the floor at 60. So the monotone rise is a BTC observation, not a market-wide one. Even for BTC it is **three points**, which is not a trend. And decisively: **the strategy holds 21–41 bars, which is 5–8 hours — one to two orders of magnitude shorter than any of these windows.** Nothing whatsoever about the strategy's edge follows from how efficiency behaves at 14 versus 60 days. It is recorded because it bears on how a regime *label* should be read, not on whether the strategy works.
+
+**What the tercile cuts actually mean.** This is a better reading than "the top third of a distribution", and it replaces that phrasing:
+
+| symbol | low cut | × floor | high cut | × floor |
+|---|---|---|---|---|
+| BTCUSDT | 0.01305 | **0.70×** | 0.03020 | **1.62×** |
+| ETHUSDT | 0.01200 | 0.64× | 0.02880 | 1.55× |
+| SOLUSDT | 0.01376 | 0.74× | 0.02706 | 1.45× |
+
+For BTC, the low cut sits at 0.70× the floor and the high cut at 1.62×. So a `low` efficiency label means **demonstrably choppier than chance**, and a `high` label means **meaningfully directional** — roughly 60% more net displacement per unit of path than a random walk would produce. Those are real, interpretable conditions, not merely distributional thirds. The same holds for ETH and SOL.
+
+**The warning stands, and the corrected numbers strengthen it.** At the primary 30-day window the median sits only 1.03–1.12× the floor: these markets are *modestly* distinguishable from a random walk on this measure, and the middle tercile in particular straddles the floor. Anyone reading a post-lift stratification as "the strategy works in efficient markets" should know that the efficient third means ER > ~0.030, which is a mild directional tilt, not a strong trend. Flagged, not resolved.
 
 **8.2 — the fit window and the available data are currently identical, so the frozen-cuts machinery is untested against real drift.** The prompt specifies fitting on 2022-01-01 → 2024-12-31 and also forbids computing anything for 2025–26. Those two instructions together mean the fit set equals the application set: terciles split 0.333/0.333/0.333 by construction, and the "later data will be unbalanced" property has nothing to act on yet. The freeze/apply path is exercised only by fixtures (`test_frozen_cuts_on_a_shifted_distribution_produce_expected_imbalance`). This is correct and intended, but the balanced-thirds result in §3 should not be mistaken for evidence that the cuts generalise. It is arithmetic, not a finding.
 
 **8.3 — the frozen tercile artifact is not under version control.** `/data/` is gitignored repo-wide, so `terciles.json` lives only on disk. A pre-registration artifact that can be deleted and silently refitted is weakly frozen: `freeze_terciles` refuses to overwrite a *different* fit window, but only while the file exists. The recorded git commit inside the JSON helps, and I did not change `.gitignore` because that is outside the permitted file scope. **Recommendation: force-add `data/derived/regime/terciles.json` to git.** It is ~1 KB and it is the artifact whose whole value is provability.
+
+> **Resolved (rerun pass, `reports/09a_regime_rerun.md` §3).** `.gitignore` now carries a scoped negation and `data/derived/regime/terciles.json` is tracked. The three parquet files and `_manifest.json` remain ignored, as does everything else under `/data/`. The `(gitignored, per repo convention — see §8.3)` note in §1 above applies to the parquet outputs only.
 
 **8.4 — a single warm-up boundary was imposed rather than per-column boundaries.** The five columns become computable at different bars: `ema_fraction` at n−1, `efficiency` and `drift` at n, `m_star` at n+13 (ATR(14) warm-up nested inside the median window), `median_daily_quote_volume` at n+94 (the 24-hour sum nested inside the median window). Per-column NaN would satisfy the letter of "bars before a full window emit NaN" but would produce **partial rows**, and partial rows invite downstream code to filter on whichever column happens to be populated. I masked all columns at the largest boundary: **2,974 bars at 30 days, not 2,880.** The cost is ~94 bars of `ema_fraction` and ~1 day of other columns discarded per symbol. Flagged because it makes the reported warm-up larger than the window and that would otherwise look like a bug.
 
