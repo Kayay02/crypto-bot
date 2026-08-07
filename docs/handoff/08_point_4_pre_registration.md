@@ -938,3 +938,75 @@ CAP BINDING RATE IS NOW A REPORTED DIAGNOSTIC at every grid point, alongside
 floor binding. It carries no acceptance threshold — A3 remains a floor-binding
 criterion only — but a cap binding materially above 5% at any grid point is a
 finding about this derivation and must be reported.
+
+---
+
+## APPENDIX I — TWO CLARIFICATIONS BEFORE THE SWEEP
+
+Made pre-lift. No performance figure seen. Neither part changes a rule,
+threshold, or acceptance criterion. Both are reporting requirements.
+
+I.1 — THE GATE'S MECHANISM MUST BE DISTINGUISHED FROM ITS EFFECT.
+
+Report 11 establishes that the RVOL gate systematically selects higher-ATR
+bars: gated floor binding runs 6-28pp below breakout floor binding in 297 of
+297 cells. The trades the gate excludes are therefore disproportionately
+floor-bound — wider stops relative to their own volatility, wider targets,
+structurally less able to reach +2R inside the hold limit.
+
+Consequently a gated-minus-ungated expectancy gap has two possible sources:
+  (a) EDGE DETECTION — the gate distinguishes good breakouts from bad, which
+      is the registered thesis; or
+  (b) VOLATILITY SELECTION — the gate removes trades whose volatility is too
+      low relative to the cost floor.
+
+Both are real value. They have different implications: under (b) a direct
+ATR% filter would do the same job more simply, and the session-normalised RVOL
+apparatus is unnecessary machinery.
+
+REQUIRED REPORTING: the gated-versus-ungated comparison is reported
+STRATIFIED BY FLOOR BINDING — separately for trades where the floor bound and
+trades where it did not. If the gate's advantage survives among non-floor-bound
+trades, mechanism (a) is supported. If it vanishes, mechanism (b) is the
+explanation.
+
+This is DESCRIPTION. The 0.05R marginal-contribution threshold and the D5
+drop rule are unchanged and continue to operate on the unstratified figure.
+The stratification informs what is built next, not whether the gate passes.
+
+I.2 — +/-25% SENSITIVITY PROBES MAY FALL OUTSIDE THE A3-ELIGIBLE SET.
+
+§4.3 specifies the +/-25% kill condition "on the SELECTED value in absolute
+multiplier terms per fold". Report 11 measures m* varying 2.2x across folds
+(BTC 2.23 to 4.84), so a common offset maps to very different absolute
+multipliers, and +/-25% spans very different offset ranges fold to fold.
+
+Worked example: BTC fold 1, m* = 2.232. A selected offset of 1.0 is multiplier
+3.232; -25% is 2.424, i.e. offset 0.19 — which FAILS A3 in that fold.
+
+The probe would then evaluate a configuration that could never have been
+selected, and a poor result there is not evidence about the strategy as
+configured.
+
+REQUIRED REPORTING: each +/-25% probe point is reported together with its A3
+eligibility in that fold. Where a probe point is A3-ineligible, that is stated
+explicitly and its expectancy is NOT read as evidence of fragility.
+
+The kill condition itself is UNCHANGED: the edge must not vanish at +/-25%.
+What is added is that an A3-ineligible probe point is labelled as such rather
+than silently counted.
+
+I.3 — RESIDUAL CAP BINDING ACCEPTED WITHOUT CHANGE.
+
+Report 11 section 5 measures cap binding on the traded population at
+5.04-10.18%, mean 8.40%, against Appendix H's 5% design intent on breakout
+bars. Appendix H required this be reported prominently; it has been.
+
+NO CHANGE IS MADE. Amendment 6's concern was a cap acting as a second stop
+rule (50% binding) and flattening the sweep; 8.4% does not do that. The
+plateau rule excludes the top grid point, so the figure at any selectable
+multiplier is lower still. Correcting it would anchor the cap on the gated P95,
+reintroducing the rvol_threshold dependency F.1 rejected for m*.
+
+Recorded honestly: that dependency is a preference, not a proof. The residual
+is accepted as the cheaper of two imperfect options.
