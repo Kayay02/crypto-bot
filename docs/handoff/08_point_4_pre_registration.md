@@ -1010,3 +1010,44 @@ reintroducing the rvol_threshold dependency F.1 rejected for m*.
 
 Recorded honestly: that dependency is a preference, not a proof. The residual
 is accepted as the cheaper of two imperfect options.
+
+---
+
+## APPENDIX J — FLOOR-BINDING COMPOSITION APPLIES TO EVERY ARM COMPARISON
+
+Made pre-lift. No performance figure seen. Reporting requirement only. No rule,
+threshold, or acceptance criterion changes.
+
+Appendix I.1 requires the gated-versus-ungated comparison to be stratified by
+floor binding, because the RVOL gate systematically selects higher-ATR bars and
+the excluded trades are disproportionately floor-bound.
+
+That reasoning is not specific to the gated/ungated pair. It applies to ANY
+expectancy comparison between arms whose floor-binding composition differs.
+
+MEASURED (report 11a): at the first A3-passing offset, floor binding on the 70%
+RVOL arm reaches or exceeds 20% in 17 of 27 fold-symbols (BTC 8/9, ETH 6/9,
+SOL 3/9), and in 28 of 297 grid cells the 70% arm is at or above 20% while the
+50% arm passes. The 30/50/70 monotonicity test of section 4.3 therefore compares
+arms of differing floor-binding composition.
+
+GENERAL REQUIREMENT. Any reported expectancy comparison between arms — gated
+versus ungated, 30 versus 50 versus 70, or any D5 leave-one-out arm — must
+carry:
+  (a) the floor-binding rate of each arm, and
+  (b) the comparison stratified into floor-bound and non-floor-bound trades,
+      wherever both strata clear the evidence minimums.
+
+Where a stratum falls below the evidence minimums, that is stated and the
+stratified figure is not reported for it. The minimums do not move.
+
+INTERPRETIVE CONSEQUENCE FOR THE MONOTONICITY TEST. Section 4.3 makes an
+improvement from 70% to 50% to 30% the sharpest falsification test of the RVOL
+gate. Where the arms differ materially in floor binding, an observed improvement
+is consistent with EITHER the gate detecting edge OR the gate removing
+structurally disadvantaged floor-bound trades. The stratified figures
+distinguish them. The test itself is UNCHANGED: flat expectancy across all three
+arms still means the gate is decorative.
+
+Recorded before the number was inspected at the offsets where selection can
+actually occur, so that the requirement is not conditioned on that measurement.
