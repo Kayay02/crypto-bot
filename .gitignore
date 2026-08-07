@@ -23,3 +23,9 @@ __pycache__/
 # git hash -- what was produced, alongside terciles.json's what was frozen. Same
 # provability argument, ~1.7 KB. The parquet outputs (9.8 MB) stay ignored.
 !/data/derived/regime/_manifest.json
+# The fold schedule is pre-registration-adjacent: §4.2's calendar rule is
+# frozen, and a committed folds.json proves the boundaries were not moved
+# after results were seen. ~4 KB.
+!/data/derived/folds/
+/data/derived/folds/*
+!/data/derived/folds/folds.json
