@@ -274,3 +274,160 @@ def test_committed_artifact_matches_the_current_design():
     for s in SYMBOLS:
         assert len(on_disk["symbols"][s]) == 9
         assert len(on_disk["symbols"][s]["1"]["multipliers"]) == 11
+
+
+# ---------------------------------------------------------------------------
+# the 30% and 70% arms -- DESCRIPTION, persisted for the monotonicity test
+# ---------------------------------------------------------------------------
+
+@needs_data
+def test_all_three_arms_are_persisted_with_eleven_offsets(tmp_path):
+    folds = sch.build_schedule()[:1]
+    grid, pre = ps.run_prescreen(("ETHUSDT",), folds)
+    ser = ps._serialise(pre)["ETHUSDT"]["folds"]["1"]
+    expect = {str(round(i * 0.25, 4)) for i in range(11)}
+    for key in ("a3_floor_binding_by_offset",
+                "a3_floor_binding_by_offset_rv30",
+                "a3_floor_binding_by_offset_rv70"):
+        assert key in ser, key
+        assert set(ser[key]) == expect, key
+
+
+@needs_data
+def test_persisted_arms_match_the_computed_rows(rows, fold):
+    """The serialiser must not silently reorder or rescale anything."""
+    pre = {"ETHUSDT": {"folds": {fold["fold_id"]: {
+        "rows": rows["ETHUSDT"], "summary": ps.summarise(rows["ETHUSDT"])}},
+        "n_folds_with_viable_band": 1, "folds_with_viable_band": [1],
+        "tradable": True}}
+    ser = ps._serialise(pre)["ETHUSDT"]["folds"][str(fold["fold_id"])]
+    for r in rows["ETHUSDT"]:
+        k = str(r["offset"])
+        assert ser["a3_floor_binding_by_offset"][k] == r["gated_50"]["floor"]
+        assert ser["a3_floor_binding_by_offset_rv30"][k] == r["gated_30"]["floor"]
+        assert ser["a3_floor_binding_by_offset_rv70"][k] == r["gated_70"]["floor"]
+
+
+@needs_data
+@pytest.mark.parametrize("symbol", SYMBOLS)
+def test_both_new_arms_decrease_monotonically_in_the_multiplier(symbol, folds):
+    """Mechanical: the floor is constant and raw distance rises with the
+    multiplier, so this must hold exactly on every arm."""
+    for f in folds:
+        r = ps.prescreen_fold_symbol(symbol, f, gr.fold_symbol_grid(symbol, f))
+        for pop in ("gated_30", "gated_70"):
+            v = [x[pop]["floor"] for x in r]
+            for i in range(len(v) - 1):
+                assert v[i + 1] <= v[i] + 1e-12, (
+                    f"{symbol} fold {f['fold_id']} {pop} offset {i}")
+
+
+@needs_data
+def test_the_arm_ordering_is_a_tendency_not_an_identity():
+    """rv30 <= rv50 <= rv70 holds in aggregate but NOT cell by cell.
+
+    A tighter gate selects higher-volume bars, which are on average higher-ATR
+    and so less often floored. That is a statistical association, not a
+    mechanical identity like the monotonicity above: RVOL and ATR are
+    correlated, not functionally linked. So individual cells invert, and this
+    test pins the observed scale of that rather than asserting an ordering the
+    data does not support.
+
+    What matters for A3 is that no inversion straddles the 20% line, which is
+    asserted below.
+    """
+    import json
+    if not os.path.exists(gr.GRID_PATH):
+        pytest.skip("grid.json not generated")
+    p = json.load(open(gr.GRID_PATH))["prescreen"]
+    offs = [str(round(i * 0.25, 4)) for i in range(11)]
+    inversions = []
+    for s in p:
+        for fid, d in p[s]["folds"].items():
+            a = d["a3_floor_binding_by_offset_rv30"]
+            b = d["a3_floor_binding_by_offset"]
+            c = d["a3_floor_binding_by_offset_rv70"]
+            for o in offs:
+                if a[o] > b[o] + 1e-12:
+                    inversions.append(a[o] - b[o])
+                if b[o] > c[o] + 1e-12:
+                    inversions.append(b[o] - c[o])
+    # Aggregate ordering holds.
+    means = {k: np.mean([d[key][o] for s in p for fid, d in p[s]["folds"].items()
+                         for o in offs])
+             for k, key in (("30", "a3_floor_binding_by_offset_rv30"),
+                            ("50", "a3_floor_binding_by_offset"),
+                            ("70", "a3_floor_binding_by_offset_rv70"))}
+    assert means["30"] < means["50"] < means["70"], means
+    # Individual inversions exist but are small.
+    assert inversions, "no inversions at all would suggest a degenerate fixture"
+    assert max(inversions) < 0.01, (
+        f"an inversion exceeded 1pp ({max(inversions):.4f}); the arms may not "
+        f"be computed on the populations they claim")
+
+
+@needs_data
+def test_no_arm_inversion_straddles_the_a3_threshold():
+    """An inversion that crossed 20% could flip how a verdict is read."""
+    import json
+    if not os.path.exists(gr.GRID_PATH):
+        pytest.skip("grid.json not generated")
+    p = json.load(open(gr.GRID_PATH))["prescreen"]
+    offs = [str(round(i * 0.25, 4)) for i in range(11)]
+    for s in p:
+        for fid, d in p[s]["folds"].items():
+            for o in offs:
+                trio = (d["a3_floor_binding_by_offset_rv30"][o],
+                        d["a3_floor_binding_by_offset"][o],
+                        d["a3_floor_binding_by_offset_rv70"][o])
+                ordered = trio[0] <= trio[1] <= trio[2]
+                if not ordered:
+                    assert not (min(trio) < 0.20 <= max(trio)), (
+                        f"{s} fold {fid} offset {o}: an out-of-order arm "
+                        f"straddles the 20% A3 line: {trio}")
+
+
+@needs_data
+def test_the_seventy_percent_arm_can_fail_a3_where_fifty_passes():
+    """The finding this task exists to surface, pinned so it cannot regress.
+
+    The 70% arm admits lower-volume, hence lower-ATR bars, so it is floored
+    more often. Where it exceeds 20% at an offset the 50% arm passes, part of
+    any 70->50->30 improvement is the FLOOR mechanism rather than the gate.
+    """
+    import json
+    if not os.path.exists(gr.GRID_PATH):
+        pytest.skip("grid.json not generated")
+    p = json.load(open(gr.GRID_PATH))["prescreen"]
+    offs = [str(round(i * 0.25, 4)) for i in range(11)]
+    n = sum(1 for s in p for fid, d in p[s]["folds"].items() for o in offs
+            if d["a3_floor_binding_by_offset"][o] < 0.20
+            <= d["a3_floor_binding_by_offset_rv70"][o])
+    assert n > 0, (
+        "no cell has the 70% arm failing A3 where the 50% arm passes; if this "
+        "ever becomes true the monotonicity caveat can be relaxed")
+
+
+@needs_data
+def test_the_new_arms_do_not_touch_the_a3_verdict(fold):
+    """§4.4: A3 is decided on the 50% arm alone. Description, not criterion.
+
+    Asserted by MUTATION rather than by inspection: the 30% and 70% arms are
+    overwritten with values that would flip a verdict if either were read, and
+    the verdict must not move. Checking that `a3_floor_binding` equals
+    `gated_50` only restates how the field was assigned, which proves nothing.
+    """
+    symbol = "BTCUSDT"
+    cell = gr.fold_symbol_grid(symbol, fold)
+    rows = ps.prescreen_fold_symbol(symbol, fold, cell)
+    before = [(x["a3_floor_binding"], x["a3_pass"]) for x in rows]
+    assert any(p for _, p in before) and not all(p for _, p in before), (
+        "fixture needs both passing and failing points to be meaningful")
+
+    for x in rows:
+        x["gated_30"]["floor"] = 0.99      # would fail A3 everywhere
+        x["gated_70"]["floor"] = 0.0       # would pass A3 everywhere
+    after = [(x["a3_floor_binding"], x["a3_pass"]) for x in rows]
+    assert after == before
+    assert ps.summarise(rows) == ps.summarise(
+        ps.prescreen_fold_symbol(symbol, fold, cell))

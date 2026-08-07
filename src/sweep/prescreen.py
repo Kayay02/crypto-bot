@@ -176,6 +176,19 @@ def _serialise(prescreen):
                 "summary": d["summary"],
                 "a3_floor_binding_by_offset": {
                     str(r["offset"]): r["a3_floor_binding"] for r in d["rows"]},
+                # The 30% and 70% arms are DESCRIPTION, never a criterion: §4.4
+                # decides A3 on the 50% arm alone. They are persisted because
+                # §4.3's 30/50/70 monotonicity test is the sharpest check on
+                # whether the gate is real, and it cannot be read without
+                # knowing how much of any observed ordering is the FLOOR
+                # mechanism rather than the gate. The 70% arm admits
+                # lower-volume, hence lower-ATR bars, so its floor binding is
+                # higher; where it crosses 20% at an offset the 50% arm passes,
+                # part of any monotonic improvement is structural.
+                "a3_floor_binding_by_offset_rv30": {
+                    str(r["offset"]): r["gated_30"]["floor"] for r in d["rows"]},
+                "a3_floor_binding_by_offset_rv70": {
+                    str(r["offset"]): r["gated_70"]["floor"] for r in d["rows"]},
                 "cap_binding_by_offset": {
                     str(r["offset"]): r["gated_50"]["cap"] for r in d["rows"]},
                 "breakout_floor_binding_by_offset": {
