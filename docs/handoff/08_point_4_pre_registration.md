@@ -1051,3 +1051,72 @@ arms still means the gate is decorative.
 
 Recorded before the number was inspected at the offsets where selection can
 actually occur, so that the requirement is not conditioned on that measurement.
+
+---
+
+## APPENDIX K — AMENDMENT 7: "PASS ACCEPTANCE" DEFINED FOR A GRID POINT
+
+Made pre-lift. No performance figure seen. This fills a gap; it does not change
+a rule. No threshold is moved.
+
+K.1 — THE GAP.
+Section 4.3's plateau rule requires that "the adjacent grid points on both sides
+also pass acceptance" and that a fold with no contiguous run of three passing
+points produces no selection. "Pass acceptance" is never defined for a single
+grid point.
+
+It cannot mean A3: section 4.4 treats the two as separate ("a fold failing A3
+produces no selection, exactly as a missing plateau does"), and A3 is fully
+resolved at step 0. It must involve expectancy, since section 4.4 states
+selection "happens by expectancy" and the kill condition frames the plateau as
+being about where the edge survives.
+
+Without a definition the sweep harness cannot identify a passing band. Supplying
+one after expectancies are visible would be fitting the selection rule to the
+results.
+
+K.2 — THE DEFINITION.
+A grid point PASSES ACCEPTANCE in a fold for a symbol when ALL of:
+
+  (a) TRAINING-fold expectancy per trade, in R, net of costs, is GREATER THAN
+      ZERO, measured on the gated arm at the 50% RVOL threshold;
+  (b) the training-fold trade count for that symbol meets the pre-committed
+      evidence minimum of 200 IS trades;
+  (c) the grid point survives A3 (already established at step 0).
+
+Selection is on TRAIN, evaluation is on TEST. That is what makes the procedure
+walk-forward, and it is why (a) is a training-fold quantity.
+
+Greater-than-zero is chosen because it is the only threshold that introduces no
+free parameter. Any margin would be a number selected without justification.
+
+ACKNOWLEDGED WEAKNESS. With sigma near 1.2R and roughly 250-400 training trades
+per symbol-fold, the standard error on a fold's expectancy is about 0.07R. A
+grid point whose true expectancy is near zero therefore passes or fails partly
+by chance, so band EDGES are noisy. This is precisely why section 4.3 requires
+three CONTIGUOUS passing points rather than accepting isolated ones. Note the
+filtering is weaker than it looks: adjacent grid points share most of their
+trades, so their expectancies are highly correlated and contiguity does not
+suppress noise the way it would for independent points. Recorded rather than
+argued away.
+
+K.3 — EVEN-COUNT BAND TIE-BREAK.
+Section 4.4 specifies "the centre of the widest contiguous passing band". A band
+with an even number of points has no single centre. BTC's A3-eligible band is
+four points wide (offsets 1.50 to 2.25), so this case is likely rather than
+hypothetical.
+
+RULE: where the band has an even number of points, take the HIGHER of the two
+central offsets — the wider stop.
+
+Justification: a wider stop strictly reduces floor binding, which is the only
+structural criterion in this design carrying a threshold. The tie is therefore
+broken on a pre-registered criterion rather than on taste. The cost is slightly
+higher cap binding, which carries no threshold (Appendix I.3).
+
+K.4 — SCOPE.
+This appendix defines acceptance for a SINGLE GRID POINT during band
+identification (step 3). It does not alter the 0.05R marginal-contribution
+threshold, the D5 drop rule, the two-of-three rule, the top-5% removal, the
++/-25% sensitivity condition, or any kill condition. Those are unchanged and
+operate as written.
