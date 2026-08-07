@@ -129,7 +129,7 @@
       "warmup_start_ms": 1708041600000
     }
   ],
-  "git_commit": "20a62262f9b9fa2ba440973d614c33d68338017a-dirty",
+  "git_commit": "af9d314b480052b91fd17b314472a13a579cef3f",
   "holdout": {
     "fold_id": "holdout",
     "test_end": "2026-07-26",
