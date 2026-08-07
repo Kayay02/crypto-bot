@@ -29,3 +29,9 @@ __pycache__/
 !/data/derived/folds/
 /data/derived/folds/*
 !/data/derived/folds/folds.json
+# grid.json records m*, the eleven multipliers, the derived cap and the A3
+# verdict per fold per symbol -- all pre-lift, and the range is not
+# extendable afterwards, so a committed copy proves it was not widened.
+!/data/derived/sweep/
+/data/derived/sweep/*
+!/data/derived/sweep/grid.json
