@@ -1139,10 +1139,20 @@ max-hold exits are strictly below +2R, since a trade reaching the target would
 have filled there; stop exits are -1R less the haircut, about -1.1R. The column
 therefore lives in approximately [-1.1, +2.0].
 
-By Popoviciu's inequality the variance of a distribution on [a, b] is at most
-(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sives 1.0(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 gge(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so t (b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^UNT, not (b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sigmhe (b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sigma <=mbol per test fold.
+NOTE ADDED POST-LIFT. The bound this appendix gave for r_multiple was itself
+wrong, at both ends. It is recorded in Appendix M.1 and is not restated here.
+The RULE below is unaffected: it was never derived from that bound, and no
+threshold moves.
 
-The oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oTh RVOL-only signals; the gated arm at a 50% pass rate roughly halves it, and
+WHY THE RULE SURVIVES. SE = sigma / sqrt(n), so the trigger fires when
+n < 25 * sigma^2 -- roughly 36 trades at sigma = 1.2R, and 49 at sigma = 1.4R.
+The trigger is therefore reachable through a LOW TRADE COUNT rather than
+through high dispersion, which is the risk actually worth guarding against, and
+the count at which it fires sits just below the pre-committed 50-trade evidence
+minimum per symbol per test fold.
+
+The original gloss assumed n of 125-200 per symbol-fold, which is M9's estimate
+for RVOL-only signals; the gated arm at a 50% pass rate roughly halves it, and
 occupancy effects may reduce it further. Whether the counts hold is an empirical
 question E6 answers.
 
