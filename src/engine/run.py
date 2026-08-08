@@ -60,9 +60,14 @@ def run(symbols=SYMBOLS, start_ts=None, end_ts=None, params=None, cfg=None,
         df = df.reset_index(drop=True)
         bars15[sym] = df
         years = sorted(set(pd.to_datetime(df["ts"], unit="ms", utc=True).dt.year))
-        # +1 year so a trade opened near a year boundary can still walk forward.
-        bars1m[sym] = simulate.load_1m(derived, sym,
-                                       years=set(years) | {max(years) + 1})
+        # +1 year so a trade opened near a year boundary can still walk forward,
+        # then CLAMPED below the holdout (Appendix M.2): that convention is
+        # right at every year boundary except the sealed one. Appendix M.3's
+        # exclusion in run_backtest is what makes the clamp safe -- no
+        # surviving trade needs a year this removes.
+        bars1m[sym] = simulate.load_1m(
+            derived, sym,
+            years=simulate.in_sample_years(set(years) | {max(years) + 1}))
         s = sg.generate_signals(df, params, sym, cfg,
                                 apply_rvol_gate=(variant == "gated"))
         if len(s):
@@ -72,7 +77,7 @@ def run(symbols=SYMBOLS, start_ts=None, end_ts=None, params=None, cfg=None,
         empty = pd.DataFrame()
         return empty, {"open_position": 0, "cooldown": 0,
                        "insufficient_margin": 0, "no_1m_coverage": 0,
-                       "min_qty": 0}, {}
+                       "min_qty": 0, "holdout_boundary": 0}, {}
 
     allsig = pd.concat(sigs, ignore_index=True)
     trades, refused, traces = simulate.run_backtest(

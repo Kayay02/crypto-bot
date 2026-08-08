@@ -21,6 +21,43 @@ from costs import (LONG, SHORT, MIN_QTY, RISK_RULE, CostConfig, check_min_qty,
 BAR_15M_MS = 900_000
 BAR_1M_MS = 60_000
 
+# --------------------------------------------------------------------------
+# the second firewall (Appendix M.2) -- the holdout, DEFINED here, never LOADED
+#
+# src/folds/ sealed its own loaders; this path predates that seal and was not
+# covered by it. The boundary is duplicated rather than imported because the
+# engine deliberately has no dependency on src/ -- it is importable standalone.
+# A test asserts this constant equals src.folds.schedule.HOLDOUT_TEST_START, so
+# the duplication cannot silently drift.
+# --------------------------------------------------------------------------
+HOLDOUT_START_MS = 1_735_689_600_000        # 2025-01-01T00:00:00Z
+HOLDOUT_START_ISO = "2025-01-01"
+HOLDOUT_YEAR = 2025
+
+
+class HoldoutSealError(PermissionError):
+    """1m data at or after the holdout boundary was requested.
+
+    RAISED, never degraded. Appendix M.3 excludes boundary-crossing trades at
+    SIGNAL TIME, before any 1m bar is requested, so in normal operation this
+    can never fire. If it fires, the exclusion did not run -- which is a defect
+    in the caller, not a data condition to be handled. Falling back to partial
+    data here would convert a bug into a silently wrong number.
+    """
+
+
+def in_sample_years(years, holdout_year=HOLDOUT_YEAR):
+    """`years` with everything at or after the holdout year removed.
+
+    Callers add `max(year) + 1` so a trade opened near a year boundary can walk
+    forward into the next year's 1m file. That convention is correct everywhere
+    except at the holdout boundary, where it would reach for sealed data. This
+    clamps it; Appendix M.3's exclusion is what makes the clamp safe, because
+    no surviving trade needs the years it removes.
+    """
+    return {y for y in years if y < holdout_year}
+
+
 def max_walk_minutes(cfg):
     """1m bars to load per trade. DERIVED from max_hold_bars, never a rule.
 
@@ -33,6 +70,58 @@ def max_walk_minutes(cfg):
     out of buffer means running out of DATA, never that a rule fired.
     """
     return (cfg.max_hold_bars + 1) * 15 + 2
+
+
+def last_1m_ts_needed(entry_ts, cfg):
+    """Timestamp of the LAST 1m bar this trade's lifecycle walk could read.
+
+    PURE ARITHMETIC on the entry timestamp and max_hold_bars. It reads no data,
+    which is the whole point: Appendix M.3's exclusion has to be decidable
+    BEFORE any 1m bar is requested, or the seal would have to be breached to
+    find out whether it should have been.
+
+    Anchored on `max_walk_minutes`, the buffer actually sliced, rather than on
+    the max-hold execution bar. The buffer is two minutes wider, so the answer
+    is the true data requirement and not merely the expected exit.
+    """
+    return entry_ts + (max_walk_minutes(cfg) - 1) * BAR_1M_MS
+
+
+def crosses_holdout(entry_ts, cfg, holdout_start_ms=HOLDOUT_START_MS):
+    """Would resolving this trade require data at or after the holdout?
+
+    DELIBERATELY CONSERVATIVE. It asks whether the MAXIMUM possible walk
+    reaches the boundary, not whether the actual exit would. Deciding on the
+    actual exit bar would mean resolving the trade, which needs the very data
+    the seal forbids. So a trade signalled from roughly 2024-12-31 13:45 onward
+    is excluded even though most such trades would have exited before midnight.
+    That over-exclusion uses no future information; the alternative does.
+    """
+    return last_1m_ts_needed(entry_ts, cfg) >= holdout_start_ms
+
+
+def require_in_sample_window(entry_ts, cfg, symbol, authorised=False,
+                             holdout_start_ms=HOLDOUT_START_MS):
+    """Backstop at the POINT OF USE. Raises if the walk reaches the holdout.
+
+    WHY THIS EXISTS AS WELL AS THE LOADER CHECK. Refusing inside `load_1m` is
+    necessary but NOT sufficient: once the holdout years are simply not loaded,
+    a boundary-crossing trade does not trigger any refusal -- it runs off the
+    end of the available records and exits `insufficient_data`, which is a
+    silently wrong number rather than a loud failure. Only a check on the
+    REQUIREMENT, evaluated per trade, turns that into a raise.
+    """
+    if authorised:
+        return
+    if crosses_holdout(entry_ts, cfg, holdout_start_ms):
+        raise HoldoutSealError(
+            f"{symbol}: a trade entering at {entry_ts} would need 1m data "
+            f"through {last_1m_ts_needed(entry_ts, cfg)}, at or after the "
+            f"holdout boundary ({HOLDOUT_START_ISO}), which is SEALED. "
+            f"Appendix M.3 excludes such trades at signal time, so reaching "
+            f"this point means the exclusion did not run -- fix the caller. "
+            f"Pass authorised=True only for the single pre-registered holdout "
+            f"evaluation at step 9 of the 4.4 sequence.")
 
 
 @dataclass
@@ -353,8 +442,16 @@ def load_15m(derived_dir, symbol):
         "ts", kind="mergesort").reset_index(drop=True)
 
 
-def load_1m(derived_dir, symbol, years=None):
+def load_1m(derived_dir, symbol, years=None, authorised=False,
+            holdout_year=HOLDOUT_YEAR, holdout_start_ms=HOLDOUT_START_MS):
     """1m bars as a numpy structured array of ts/high/low/close ONLY.
+
+    REFUSES THE HOLDOUT BY DEFAULT (Appendix M.2). `authorised` defaults to
+    False and must be passed explicitly to read a partition at or after
+    `holdout_year`, matching the pattern `src/folds/schedule.load_bars` already
+    uses. Passing `years=None` means every partition on disk, which includes
+    the holdout, so the default path refuses that too rather than quietly
+    loading it.
 
     open_synth and volume are dropped at the boundary: the spec forbids reading
     1m volume and 1m open, and the cheapest way to guarantee that is to not
@@ -366,14 +463,38 @@ def load_1m(derived_dir, symbol, years=None):
 
     paths = sorted(glob.glob(
         f"{derived_dir}/ohlcv_1m/symbol={symbol}/year=*/data.parquet"))
+
+    def _year(p):
+        return int(p.split("year=")[1].split("/")[0])
+
     if years is not None:
-        paths = [p for p in paths
-                 if int(p.split("year=")[1].split("/")[0]) in years]
+        paths = [p for p in paths if _year(p) in years]
+    if not authorised:
+        sealed = sorted({_year(p) for p in paths if _year(p) >= holdout_year})
+        if sealed:
+            raise HoldoutSealError(
+                f"{symbol}: 1m partition(s) {sealed} lie at or after the "
+                f"holdout boundary ({HOLDOUT_START_ISO}), which is SEALED. "
+                f"Use simulate.in_sample_years() to clamp the requested set. "
+                f"Pass authorised=True only for the single pre-registered "
+                f"holdout evaluation at step 9 of the 4.4 sequence.")
+    if not paths:
+        raise FileNotFoundError(
+            f"{symbol}: no 1m partitions selected from {derived_dir} for "
+            f"years={years}")
     frames = [pq.read_table(p, columns=["ts", "high", "low", "close"]).to_pandas()
               for p in paths]
     df = pd.concat(frames, ignore_index=True).sort_values(
         "ts", kind="mergesort").reset_index(drop=True)
-    return df.to_records(index=False)
+    recs = df.to_records(index=False)
+    # Belt and braces: a mislabelled partition would defeat the year check.
+    if not authorised and len(recs) and int(recs["ts"][-1]) >= holdout_start_ms:
+        raise HoldoutSealError(
+            f"{symbol}: 1m partitions for years {sorted(set(years)) if years else 'ALL'} "
+            f"contain a bar at {int(recs['ts'][-1])}, at or after the SEALED "
+            f"holdout boundary. The partition labels do not match their "
+            f"contents -- report this rather than working around it.")
+    return recs
 
 
 def slice_1m(recs, start_ts, n):
@@ -389,7 +510,8 @@ def slice_1m(recs, start_ts, n):
 
 def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
                  donchian_period=20, trace_signal_ts=None, mode="portfolio",
-                 order_specs=None):
+                 order_specs=None, exclude_holdout_crossing=True,
+                 authorised_1m=False, holdout_start_ms=HOLDOUT_START_MS):
     """Walk signals in time order. `mode` selects which constraints apply.
 
     PORTFOLIO mode (realism instrument -- equity curve, drawdown, occupancy):
@@ -425,7 +547,7 @@ def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
     blocked = {}                 # (symbol, direction) -> ts of stop-out
     trades = []
     refused = {"open_position": 0, "cooldown": 0, "insufficient_margin": 0,
-               "no_1m_coverage": 0, "min_qty": 0}
+               "no_1m_coverage": 0, "min_qty": 0, "holdout_boundary": 0}
     traces = {}
 
     for _, s in sig.iterrows():
@@ -433,6 +555,20 @@ def run_backtest(signals, bars15_by_symbol, bars1m_by_symbol, cfg, ticks,
         direction = s["direction"]
         sig_ts = int(s["signal_bar_ts"])
         entry_ts = sig_ts + BAR_15M_MS
+
+        # ---- Appendix M.3: exclusion runs FIRST, before any 1m data is
+        # requested. It is decided by arithmetic on `entry_ts` alone, so no
+        # sealed bar is touched to find out whether a sealed bar is needed.
+        # Ordering is what makes the seal provable: because this runs first, a
+        # `require_in_sample_window` raise below is unambiguous evidence of a
+        # bug. If exclusion ran only after the loader complained, refusals
+        # would be routine and would stop carrying information.
+        if exclude_holdout_crossing and crosses_holdout(entry_ts, cfg,
+                                                        holdout_start_ms):
+            refused["holdout_boundary"] += 1
+            continue
+        require_in_sample_window(entry_ts, cfg, sym, authorised_1m,
+                                 holdout_start_ms)
 
         open_positions = [p for p in open_positions if p["exit_ts"] > entry_ts]
 
@@ -553,6 +689,9 @@ def summarize(trades, refused):
         "refused_cooldown": refused["cooldown"],
         "refused_insufficient_margin": refused["insufficient_margin"],
         "refused_no_1m_coverage": refused["no_1m_coverage"],
+        # Appendix M.3. Trades whose resolution would have needed sealed data,
+        # removed at signal time. Reported per fold per symbol by the caller.
+        "refused_holdout_boundary": refused.get("holdout_boundary", 0),
         "refused_min_qty": refused.get("min_qty", 0),
         # stop_binding_mechanism, per A7. Closes the question of whether the
         # "volatility-adaptive" stop is actually running as one.

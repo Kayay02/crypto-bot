@@ -194,17 +194,19 @@ def load_symbol_bars(symbol, derived_dir=sch.DERIVED):
     15m goes through `schedule.load_bars`, which REFUSES 2025 onward on the
     default path -- so no holdout bar can produce a signal here.
 
-    1m is loaded through the engine's own loader at the engine's own year span
-    (`run.py` adds `max(year) + 1` for exactly this reason): a trade signalled
-    in the final hours of 2024-12-31 walks its 41-bar lifecycle into
-    2025-01-01. Those minutes RESOLVE an in-sample trade; they never originate
-    one, and nothing is aggregated over them. Trades whose exit crosses the
-    boundary are counted and reported.
+    1m is loaded through the engine's own loader, at the engine's `max(year)+1`
+    span CLAMPED BELOW THE HOLDOUT (Appendix M.2). E6's first run loaded 2025
+    so a trade signalled in the final hours of 2024-12-31 could walk its 41-bar
+    lifecycle; zero trades crossed, so nothing was contaminated, but the
+    capability was a gap in the seal. It is now closed: the sealed years are
+    never loaded, and Appendix M.3's exclusion removes at signal time any trade
+    that would have needed them, so nothing silently exits on missing data.
     """
     bars15 = sch.load_bars(symbol, sch.DATA_START, sch.IS_END, derived_dir)
     years = sorted(set(pd.to_datetime(bars15["ts"], unit="ms", utc=True).dt.year))
-    recs = simulate.load_1m(derived_dir, symbol,
-                            years=set(years) | {max(years) + 1})
+    recs = simulate.load_1m(
+        derived_dir, symbol,
+        years=simulate.in_sample_years(set(years) | {max(years) + 1}))
     return bars15, recs
 
 
@@ -248,7 +250,7 @@ def run_period(symbol, fold, period, conf, bars15, recs, ticks, order_specs):
         empty = pd.DataFrame(columns=["symbol", "direction", "r_multiple"])
         return empty, {"open_position": 0, "cooldown": 0,
                        "insufficient_margin": 0, "no_1m_coverage": 0,
-                       "min_qty": 0}, 0, check_tick_bounds(
+                       "min_qty": 0, "holdout_boundary": 0}, 0, check_tick_bounds(
                            empty, ticks[symbol], cfg.risk_usd, "empty")
     trades, refused, _ = simulate.run_backtest(
         sig, {symbol: bars15}, {symbol: recs}, cfg, ticks,
@@ -470,6 +472,8 @@ def empty_counters():
         # Appendix L excursion, accumulated across every cell.
         "n_trades": 0, "n_above_2r": 0, "max_r": None,
         "max_excess_ticks": 0.0, "n_above_tick_bound": 0,
+        # Appendix M.3, summed across every cell.
+        "excluded_holdout_boundary": 0,
     }
 
 
@@ -507,6 +511,8 @@ def collect(symbols=SYMBOLS, folds=None, derived_dir=sch.DERIVED,
                 frames[key] = t
                 counters["refused"][f"{symbol}|{fid}|{period}"] = refused
                 counters["n_ungated"][f"{symbol}|{fid}|{period}"] = n_ung
+                counters["excluded_holdout_boundary"] += refused.get(
+                    "holdout_boundary", 0)
                 counters["n_trades"] += exc["n"]
                 counters["n_above_2r"] += exc["n_above_2r"]
                 counters["n_above_tick_bound"] += exc["n_above_tick_bound"]
@@ -867,6 +873,8 @@ PERMITTED_STAT_KEYS = frozenset({
     # counters
     "open_position", "cooldown", "insufficient_margin", "no_1m_coverage",
     "min_qty", "exit_after_is_end", "signals_before_train_start",
+    # Appendix M.3: boundary-crossing trades excluded at signal time.
+    "holdout_boundary", "excluded_holdout_boundary",
 })
 
 
@@ -1422,6 +1430,8 @@ def render_report(stats, overlap, provenance, columns=SIGMA_COLUMNS):
         w(f"| refused_{k2} | {agg[k2]} |")
     w(f"| trades whose exit_ts crosses {sch.HOLDOUT_TEST_START} | "
       f"{stats['counters']['exit_after_is_end']} |")
+    w(f"| **excluded, boundary-crossing (Appendix M.3)** | "
+      f"**{stats['counters'].get('excluded_holdout_boundary', 0)}** |")
     w(f"| trades originating before their period start | "
       f"{stats['counters']['signals_before_train_start']} |")
     w("")
