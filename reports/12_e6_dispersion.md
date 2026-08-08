@@ -6,9 +6,16 @@ The lift covers IN-SAMPLE results only. The holdout (2025-01-01 onward) stays se
 
 **This report carries dispersion and counts and nothing about location.** No mean, median or sum of `r_multiple` or `net_pnl`; no expectancy; no win rate; no profit factor; no Sharpe; no equity curve; no exit-reason or holding-time distribution; no per-arm or per-configuration comparison. That is not a stylistic choice: E6 decides fold architecture, and the decision is only blind if the evidence supporting it is. The prohibition is enforced by `assert_no_location_statistic`, which re-derives every forbidden quantity from the trade tables and refuses a report in which one appears.
 
+## 0. What this run found
+
+1. **Sigma is materially SMALLER than the design assumed.** Measured 0.7242R to 0.8467R per symbol against the 1.2R estimate §4.5 wrote the power table around — roughly 60–70% of it. Every downstream comparison is therefore more precise than pre-registered, not less.
+2. **The E6 trigger does NOT fire**, in 0 of 27 fold-symbol test cells. The largest test-fold SE is 0.0787R against a 0.2R threshold — a factor of 2.5 of headroom. **The nine-fold architecture stands.** Per §4.5 this is reported, not acted on.
+3. **No evidence minimum is missed anywhere.** All 27 fold-symbol cells clear 200 training trades and 50 test trades, and all 108 direction cells clear 30.
+4. **Appendix L's upper bound on `r_multiple` is arithmetically wrong**, and the pre-registered sanity check duly fails: 1421 of 20010 trades exceed +2.0R, by at most 0.9990 of one tick. The cause is the engine's deliberate conservative rounding of the target, not a defect. §4 and §10.1 set this out. It changes nothing about 1, 2 or 3.
+
 ## 1. Provenance
 
-- **HEAD at run time:** `1ad2618fdba07ed183bd19287bf5d45aeddba66f`
+- **HEAD at run time:** `a30b97b7988c8edbdb0d6225a2496405ac546fc1`
 - **Working tree:** clean (verified before the run; a dirty hash aborts)
 - **grid.json provenance:** `3d04c00663af8098a4fe0740d4d31d52d828d169` (step 0 artifact, pre-lift)
 - **Mode:** signal mode (§4.5 edge-test instrument) — every signal simulated independently, no occupancy, cooldown or margin limit
@@ -139,7 +146,9 @@ A filled target therefore delivers +2R **plus up to one tick of P&L**, and never
 
 **Measured against the correct ceiling:** the largest excess over +2R is **0.9990 of one tick** — strictly under one tick, in every one of the 1421 cases. 0 trades exceed the tick-aware ceiling. That is the check whose breach would mean an engine defect, and it passes.
 
-**Consequence for the E6 conclusion: none.** Widening the range to [-1.2, 2.000652] moves the Popoviciu cap from 1.55R to 1.600326R. Measured sigma is 0.8467R at its largest, nowhere near either figure, so the dispersion finding and the fold trigger verdict are unaffected.
+**Consequence for the E6 conclusion: none.** Appendix L derives 1.55R from the range [-1.1, 2]. Correcting only the upper end to the observed 2.000652 gives 1.550326R — a move of 3.26e-04R. Measured sigma is 0.8467R at its largest, nowhere near either figure, so the dispersion finding and the fold trigger verdict are unaffected.
+
+**The realised range is TIGHTER than Appendix L assumed, not wider.** The observed minimum is -1.000640R, not the −1.1R the derivation posits: `position_size` already absorbs both fee legs and the stop haircut into the risk denominator, so a stop-out lands at −1R net rather than −1R plus a haircut. Popoviciu over the realised range [-1.0006, 2.0007] gives 1.5006R, and measured sigma is below half of that.
 
 **No threshold was moved to make this pass.** Appendix L is a frozen pre-registration document and §4.5 forbids post-lift amendment, so it is NOT amended here. The pre-registered check is retained, its failure is reported above, and the hard stop that aborts the run was placed on the tighter engine-derived ceiling — the bound that Appendix L was trying to express. See §10 for this recorded as a specification defect.
 

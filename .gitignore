@@ -35,3 +35,12 @@ __pycache__/
 !/data/derived/sweep/
 /data/derived/sweep/*
 !/data/derived/sweep/grid.json
+# e6_dispersion.json records the measured sigma, the per-fold trade counts and
+# the E6 trigger verdict, against the clean hash the lift was taken at. The
+# trigger is pre-committed and cannot be re-decided once sigma is known, so a
+# committed copy proves which numbers the fold-architecture decision was made
+# on. ~103 KB. The 54 trade tables under trades/ (4.1 MB) stay ignored -- they
+# are reproducible from this hash and carry the returns themselves.
+!/data/derived/analysis/
+/data/derived/analysis/*
+!/data/derived/analysis/e6_dispersion.json
