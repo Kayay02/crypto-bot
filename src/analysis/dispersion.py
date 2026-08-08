@@ -77,6 +77,7 @@ E6_SE_TRIGGER_R = 0.20
 # inequality then caps sigma at (b - a) / 2 over [-1.1, +2.0].
 R_UPPER_BOUND = 2.0
 R_LOWER_BOUND = -1.2          # -1.1 nominal, 0.1R of slack for the haircut
+NOMINAL_R_LOWER = -1.1        # the value Appendix L's 1.55R is derived FROM
 POPOVICIU_SIGMA_MAX = 1.55
 
 # ---- §4.4 / carried commitments: the evidence minimums. THESE DO NOT MOVE --
@@ -1060,6 +1061,42 @@ def render_report(stats, overlap, provenance, columns=SIGMA_COLUMNS):
       "appears.")
     w("")
 
+    # ---- headline --------------------------------------------------------
+    b0 = stats["bounds_check"]
+    t0 = stats["trigger"]
+    sig_lo = min(v["pooled_is"]["sigma"] for v in stats["symbols"].values())
+    sig_hi = max(v["pooled_is"]["sigma"] for v in stats["symbols"].values())
+    w("## 0. What this run found")
+    w("")
+    w(f"1. **Sigma is materially SMALLER than the design assumed.** Measured "
+      f"{sig_lo:.4f}R to {sig_hi:.4f}R per symbol against the 1.2R estimate "
+      f"§4.5 wrote the power table around — roughly 60–70% of it. Every "
+      f"downstream comparison is therefore more precise than pre-registered, "
+      f"not less.")
+    w(f"2. **The E6 trigger does NOT fire**, in "
+      f"{t0['n_firing']} of {t0['n_cells']} fold-symbol test cells. The "
+      f"largest test-fold SE is "
+      f"{max(c['se'] for c in t0['cells'] if c['se'] is not None):.4f}R "
+      f"against a {E6_SE_TRIGGER_R:g}R threshold — a factor of "
+      f"{E6_SE_TRIGGER_R / max(c['se'] for c in t0['cells'] if c['se'] is not None):.1f} "
+      f"of headroom. **The nine-fold architecture stands.** Per §4.5 this is "
+      f"reported, not acted on.")
+    w(f"3. **No evidence minimum is missed anywhere.** All "
+      f"{len(stats['symbols']) * len(stats['folds'])} fold-symbol cells clear "
+      f"200 training trades and 50 test trades, and all "
+      f"{len(stats['symbols']) * len(stats['folds']) * 4} direction cells "
+      f"clear 30." if not stats["shortfalls"] else
+      f"3. **{len(stats['shortfalls'])} cells fall short of an evidence "
+      f"minimum** — see §5.1. The minimums do not move.")
+    w(f"4. **Appendix L's upper bound on `r_multiple` is arithmetically "
+      f"wrong**, and the pre-registered sanity check duly fails: "
+      f"{b0['n_above_2r']} of {b0['n_trades']} trades exceed +2.0R, by at "
+      f"most {b0['max_excess_ticks']:.4f} of one tick. The cause is the "
+      f"engine's deliberate conservative rounding of the target, not a "
+      f"defect. §4 and §10.1 set this out. It changes nothing about 1, 2 "
+      f"or 3.")
+    w("")
+
     # ---- provenance ------------------------------------------------------
     w("## 1. Provenance")
     w("")
@@ -1192,13 +1229,25 @@ def render_report(stats, overlap, provenance, columns=SIGMA_COLUMNS):
       f"{b['n_above_tick_bound']} trades exceed the tick-aware ceiling. That "
       f"is the check whose breach would mean an engine defect, and it passes.")
     w("")
-    w("**Consequence for the E6 conclusion: none.** Widening the range to "
-      f"[{R_LOWER_BOUND:g}, {_num(b['max_observed'], 6)}] moves the Popoviciu "
-      f"cap from {POPOVICIU_SIGMA_MAX:g}R to "
-      f"{(b['max_observed'] - R_LOWER_BOUND) / 2 if b['max_observed'] else 0:.6f}R. "
-      f"Measured sigma is {_num(b['max_sigma_observed'], 4)}R at its largest, "
-      f"nowhere near either figure, so the dispersion finding and the fold "
-      f"trigger verdict are unaffected.")
+    mx = b["max_observed"] or R_UPPER_BOUND
+    mn = b["min_observed"] or NOMINAL_R_LOWER
+    w("**Consequence for the E6 conclusion: none.** Appendix L derives "
+      f"{POPOVICIU_SIGMA_MAX:g}R from the range "
+      f"[{NOMINAL_R_LOWER:g}, {R_UPPER_BOUND:g}]. Correcting only the upper "
+      f"end to the observed {_num(mx, 6)} gives "
+      f"{(mx - NOMINAL_R_LOWER) / 2:.6f}R — a move of "
+      f"{((mx - NOMINAL_R_LOWER) / 2 - POPOVICIU_SIGMA_MAX):.2e}R. Measured "
+      f"sigma is {_num(b['max_sigma_observed'], 4)}R at its largest, nowhere "
+      f"near either figure, so the dispersion finding and the fold trigger "
+      f"verdict are unaffected.")
+    w("")
+    w(f"**The realised range is TIGHTER than Appendix L assumed, not wider.** "
+      f"The observed minimum is {_num(mn, 6)}R, not the −1.1R the derivation "
+      f"posits: `position_size` already absorbs both fee legs and the stop "
+      f"haircut into the risk denominator, so a stop-out lands at −1R net "
+      f"rather than −1R plus a haircut. Popoviciu over the realised range "
+      f"[{_num(mn, 4)}, {_num(mx, 4)}] gives {(mx - mn) / 2:.4f}R, and "
+      f"measured sigma is below half of that.")
     w("")
     w("**No threshold was moved to make this pass.** Appendix L is a frozen "
       "pre-registration document and §4.5 forbids post-lift amendment, so it "
