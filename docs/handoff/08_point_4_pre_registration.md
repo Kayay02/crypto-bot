@@ -1163,3 +1163,108 @@ because it calibrates how precisely every downstream comparison can be read
 whether the trigger fires.
 
 Evidence minimums do NOT move. This appendix moves no threshold.
+---
+
+## APPENDIX M — POST-LIFT RECORD: E6 FINDINGS AND THE HOLDOUT SEAL GAP
+
+THIS APPENDIX IS POST-LIFT. The firewall lifted when E6 ran (report 12). Per
+section 4.5 nothing pre-registered may be amended from here: once results are
+seen, the honest response to a defect is to record it, not to repair the design
+and carry on as though the repair had been pre-registered. This appendix
+RECORDS defects and decisions. It alters no rule, no threshold, no acceptance
+criterion and no kill condition. It is deliberately NOT numbered as an
+amendment, and nothing in it may be read as one.
+
+M.1 — APPENDIX L'S BOUND WAS WRONG. RECORDED, NOT FIXED.
+
+Appendix L asserted that r_multiple lies in approximately [-1.1, +2.0]. Both
+ends are wrong.
+
+  UPPER END. Target exits do not fill at exactly +2R.
+  costs.solve_price_for_net rounds the target AWAY from the position, so that a
+  level is never claimed at a price which would deliver less than the solved
+  net figure. A filled target therefore lands up to one tick above +2R.
+  Measured in report 12: 1,421 of 20,010 trades exceed +2.0R, every one of them
+  a target exit, the worst by 0.9990 of a tick.
+
+  LOWER END. The realised minimum is -1.0006R, not -1.1R. position_size absorbs
+  both fee legs and the stop haircut into the risk denominator, so a stop loses
+  exactly the pre-committed risk_usd rather than that plus a haircut.
+
+The engine behaves exactly as Points 1R and 3R specify. What was wrong is the
+pre-registration's DESCRIPTION of the engine, not the engine.
+
+check_r_bounds was NOT widened to make the check pass. It is retained verbatim
+as the literal Appendix L check, and its failure stands as report 12's headline
+finding. The hard stop that aborts a run was moved onto the bound the engine's
+own arithmetic implies, +2R plus one tick of P&L per trade, and that bound
+passes with zero breaches. Popoviciu's ceiling moves from 1.55R to 1.5503R.
+Measured sigma is at most 0.8467R, so E6 findings 1 through 3 are untouched.
+
+NOTHING DOWNSTREAM IS AFFECTED. Every rule that could plausibly have depended
+on the range of r_multiple turns out not to:
+
+  top-5% winner removal is a PERCENTILE, so it is invariant to the range;
+  the +/-25% sensitivity condition operates on the MULTIPLIER, not on returns;
+  the 0.05R marginal-contribution threshold is a DIFFERENCE between two
+    expectancies, so a shift common to both cancels;
+  the evidence minimums are COUNTS;
+  the E6 trigger compares a measured sigma against a threshold that sigma
+    never approached.
+
+The defect lies in a diagnostic assertion, not in decision machinery. Nothing
+is labelled exploratory.
+
+M.2 — THE HOLDOUT SEAL HAS A GAP IN THE 1m PATH.
+
+Report 12 section 10.2 records that 1m bars from 2025 were loaded, so that an
+in-sample trade signalled in the closing hours of 2024-12-31 could resolve its
+41-bar lifecycle instead of exiting on missing data. That matches
+src/engine/run.py, which already loads max(year) + 1 for the same reason. ZERO
+trades crossed the boundary, so no holdout bar influenced any figure in report
+12. No contamination occurred.
+
+The gap is structural rather than realised. Section 4.2's seal covers the
+src/folds/ loaders and NOT the engine's 1m path, which predates it. E6 ran one
+configuration per fold-symbol. The sweep runs eleven multipliers across three
+RVOL arms, and wider stops imply longer holds, so boundary crossings become
+materially more likely there than they were here.
+
+REQUIRED BEFORE THE SWEEP. The 1m loading path must refuse 2025-01-01 and later
+by default, on the same authorised=False pattern already used in src/folds/,
+with a mutation test proving that it refuses. A seal never shown to refuse is
+not a seal.
+
+M.3 — BOUNDARY-CROSSING TRADES ARE EXCLUDED. POST-LIFT DECISION.
+
+Section 4.2 does not say what happens to an in-sample trade whose resolution
+would require data at or after 2025-01-01.
+
+RULE. Such trades are EXCLUDED from in-sample analysis, and the excluded count
+is reported per fold per symbol.
+
+Reason. Exclusion is the only option that spends no holdout data. Truncating at
+the boundary would require inventing an exit price, which is a fabricated
+outcome. Resolving with holdout bars would contaminate an in-sample result
+inside the very module that selects the candidate, which is the one place
+contamination cannot be tolerated.
+
+THIS DECISION IS POST-LIFT and is labelled as such. It affected zero trades in
+E6. It moves no threshold and changes no acceptance criterion.
+
+M.4 — THE D5 POOLED POPULATION MUST BE NAMED.
+
+Report 12 gives a pooled D5 standard error of 0.0055R on n = 20,010. If that
+population spans train and test across all nine folds, the figure is not a
+count of independent trades: adjacent training windows overlap by 50%, so a
+trade in the middle of the span is counted two or three times. That inflates n
+and understates SE by roughly a factor of 1.6.
+
+The conclusion survives. A corrected SE near 0.0087R against the 0.05R
+threshold still gives a ratio near 0.17, so the pooled D5 figure remains
+readable, which is what section 4.4's pooling commitment requires of it.
+
+REQUIRED. The sweep report must state which population every pooled figure is
+computed over, and D5 attribution runs on TEST folds only, which do not
+overlap. This is a clarification of section 4.4's existing pooling rule, not a
+change to it.
