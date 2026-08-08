@@ -1120,3 +1120,36 @@ identification (step 3). It does not alter the 0.05R marginal-contribution
 threshold, the D5 drop rule, the two-of-three rule, the top-5% removal, the
 +/-25% sensitivity condition, or any kill condition. Those are unchanged and
 operate as written.
+
+---
+
+## APPENDIX L — AMENDMENT 8: THE E6 TRIGGER GLOSS WAS WRONG
+
+Made pre-lift. No performance figure seen. The RULE is unchanged. Its
+explanatory gloss was arithmetically wrong and is corrected here.
+
+THE RULE, UNCHANGED. If a 3-month test fold's standard error on expectancy
+exceeds 0.20R, test folds extend to 6 months with a 6-month step, giving five
+folds instead of nine.
+
+THE DEFECT. Section 4.5 glosses this as tripping "at roughly sigma > 2.2-2.8R".
+Sigma cannot reach 2.2R. r_multiple is mechanically bounded: target exits fill
+at exactly +2R (maker limit at a target solved net of costs); time-stop and
+max-hold exits are strictly below +2R, since a trade reaching the target would
+have filled there; stop exits are -1R less the haircut, about -1.1R. The column
+therefore lives in approximately [-1.1, +2.0].
+
+By Popoviciu's inequality the variance of a distribution on [a, b] is at most
+(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sives 1.0(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 gge(b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so t (b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^UNT, not (b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sigmhe (b - a)^2 / 4, so sigma <= 1.55R, attained only by(b - a)^2 / 4, so sigma <=mbol per test fold.
+
+The oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oThe oTh RVOL-only signals; the gated arm at a 50% pass rate roughly halves it, and
+occupancy effects may reduce it further. Whether the counts hold is an empirical
+question E6 answers.
+
+CORRECTED READING. The E6 trigger is a TRADE-COUNT guard expressed in standard
+error units, not a dispersion guard. Sigma is still measured and reported,
+because it calibrates how precisely every downstream comparison can be read
+(section 4.5's noise caveat), but it is the fold trade counts that determine
+whether the trigger fires.
+
+Evidence minimums do NOT move. This appendix moves no threshold.
