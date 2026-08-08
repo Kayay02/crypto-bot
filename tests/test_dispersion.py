@@ -75,8 +75,7 @@ def synthetic():
             for period, n in (("train", 260), ("test", 130)):
                 seed += 1
                 frames[(s, fid, period)] = make_trades(s, fid, period, n, seed)
-    counters = {"refused": {}, "n_ungated": {}, "exit_after_is_end": 0,
-                "signals_before_train_start": 0}
+    counters = dp.empty_counters()
     for k in frames:
         counters["refused"]["|".join(str(x) for x in k)] = {
             "open_position": 0, "cooldown": 0, "insufficient_margin": 0,
@@ -213,15 +212,55 @@ def test_sigma_bound_catches_a_sigma_above_popoviciu():
         dp.check_sigma_bound(1.5501, "planted")
 
 
-def test_build_stats_raises_on_an_out_of_bounds_trade(synthetic):
+def test_build_stats_raises_on_a_trade_below_the_lower_bound(synthetic):
     """The bound is enforced on the real path, not only in the helper."""
     frames, confs, counters, folds = synthetic
     key = ("AAAUSDT", 1, "test")
     bad = frames[key].copy()
-    bad.loc[bad.index[0], "r_multiple"] = 2.5
+    bad.loc[bad.index[0], "r_multiple"] = -1.5
     frames = {**frames, key: bad}
-    with pytest.raises(dp.BoundsViolation):
+    with pytest.raises(dp.BoundsViolation, match="ENGINE DEFECT"):
         dp.build_stats(frames, confs, counters, folds, None)
+
+
+class _FixedTick:
+    def __init__(self, tick):
+        self.tick = tick
+
+    def tick_at(self, ts):
+        return self.tick
+
+
+def test_tick_upper_bound_is_two_R_plus_exactly_one_tick():
+    """+2R plus qty x tick / risk_usd, and nothing else."""
+    t = pd.DataFrame({"signal_bar_ts": [0, 0], "qty": [4.0, 10.0]})
+    hi = dp.tick_upper_bound(t, _FixedTick(0.5), 20.0)
+    assert hi[0] == pytest.approx(2.0 + 4.0 * 0.5 / 20.0)
+    assert hi[1] == pytest.approx(2.0 + 10.0 * 0.5 / 20.0)
+
+
+def test_check_tick_bounds_allows_a_sub_tick_excursion():
+    """The measured shape: over +2R, under one tick. Must NOT raise."""
+    t = pd.DataFrame({"signal_bar_ts": [0], "qty": [4.0],
+                      "r_multiple": [2.0 + 0.99 * (4.0 * 0.5 / 20.0)]})
+    out = dp.check_tick_bounds(t, _FixedTick(0.5), 20.0, "sub-tick")
+    assert out["n_above_2r"] == 1
+    assert out["n_above_tick_bound"] == 0
+    assert out["max_excess_ticks"] == pytest.approx(0.99)
+
+
+def test_check_tick_bounds_catches_an_excursion_beyond_one_tick():
+    """Planted: +2R by more than a tick. Rounding cannot explain it."""
+    t = pd.DataFrame({"signal_bar_ts": [0], "qty": [4.0],
+                      "r_multiple": [2.0 + 1.01 * (4.0 * 0.5 / 20.0)]})
+    with pytest.raises(dp.BoundsViolation, match="ENGINE DEFECT"):
+        dp.check_tick_bounds(t, _FixedTick(0.5), 20.0, "planted")
+
+
+def test_check_r_lower_bound_has_teeth():
+    dp.check_r_lower_bound([-1.19, 0.0, 5.0], "clean")   # upper is not its job
+    with pytest.raises(dp.BoundsViolation, match="ENGINE DEFECT"):
+        dp.check_r_lower_bound([-1.2001], "planted")
 
 
 def test_sigma_is_ddof_1_and_matches_numpy(synthetic):
@@ -409,9 +448,7 @@ def test_guard_does_not_fire_on_a_permitted_extreme(synthetic_report):
 
 def _rebuild(frames):
     """confs / counters / folds matching an arbitrary synthetic `frames`."""
-    confs, counters = {}, {"refused": {}, "n_ungated": {},
-                           "exit_after_is_end": 0,
-                           "signals_before_train_start": 0}
+    confs, counters = {}, dp.empty_counters()
     fids = sorted({k[1] for k in frames})
     for s, fid, _ in frames:
         confs[(s, fid)] = {
@@ -589,18 +626,72 @@ def _trade_files():
     return paths
 
 
-def test_artifact_every_r_multiple_is_inside_appendix_L():
-    """Recomputed from the trade tables, not read back from the summary."""
-    worst_lo, worst_hi, n = 0.0, 0.0, 0
+def test_artifact_every_r_multiple_clears_appendix_L_lower_bound():
+    """Recomputed from the trade tables, not read back from the summary.
+
+    The LOWER bound has no rounding mechanism that could relax it, so it is
+    asserted literally.
+    """
+    worst_lo, n = 0.0, 0
     for p in _trade_files():
         r = pd.read_parquet(p, columns=["r_multiple"])["r_multiple"].to_numpy()
         n += len(r)
         if len(r):
             worst_lo = min(worst_lo, float(r.min()))
-            worst_hi = max(worst_hi, float(r.max()))
-        dp.check_r_bounds(r, os.path.basename(p))
+        dp.check_r_lower_bound(r, os.path.basename(p))
     assert n > 0
-    assert dp.R_LOWER_BOUND <= worst_lo and worst_hi <= dp.R_UPPER_BOUND
+    assert worst_lo >= dp.R_LOWER_BOUND
+
+
+def test_artifact_upper_excursions_are_target_exits_within_one_tick():
+    """The finding: Appendix L's +2.0 is exceeded, but never by a whole tick.
+
+    Appendix L's premise "target exits fill at exactly +2R" is wrong --
+    `costs.solve_price_for_net` rounds the target AWAY from the position so a
+    level never delivers less than +2R. This test pins BOTH halves of the
+    finding: every excursion is a target exit, and every one is under one tick
+    of P&L. A future engine change that broke either would fail here.
+    """
+    import contracts
+    ticks = contracts.load_cache()
+    n_above, worst_ticks = 0, 0.0
+    for p in _trade_files():
+        symbol = os.path.basename(p).split("_")[0]
+        t = pd.read_parquet(p, columns=["r_multiple", "qty", "signal_bar_ts",
+                                        "exit_reason"])
+        if not len(t):
+            continue
+        r = t["r_multiple"].to_numpy(float)
+        above = r > dp.R_UPPER_BOUND
+        if not above.any():
+            continue
+        assert set(t.loc[above, "exit_reason"]) == {"target"}, (
+            "an excursion above +2R came from an exit reason other than "
+            "`target`; conservative target rounding cannot explain that")
+        hi = dp.tick_upper_bound(t, ticks[symbol], 20.0)
+        one_tick = hi - dp.R_UPPER_BOUND
+        worst_ticks = max(worst_ticks,
+                          float(((r - dp.R_UPPER_BOUND) / one_tick)[above].max()))
+        n_above += int(above.sum())
+    assert n_above > 0, "no excursion found -- this test would pass vacuously"
+    assert worst_ticks < 1.0, f"worst excess is {worst_ticks} ticks"
+
+
+def test_artifact_no_trade_exceeds_the_engine_derived_ceiling():
+    """The check whose breach WOULD be an engine defect."""
+    import contracts
+    ticks = contracts.load_cache()
+    for p in _trade_files():
+        symbol = os.path.basename(p).split("_")[0]
+        t = pd.read_parquet(p, columns=["r_multiple", "qty", "signal_bar_ts"])
+        if len(t):
+            dp.check_tick_bounds(t, ticks[symbol], 20.0, os.path.basename(p))
+
+
+def test_literal_appendix_L_check_still_has_teeth():
+    """The pre-registered check is retained, and still catches what it targets."""
+    with pytest.raises(dp.BoundsViolation):
+        dp.check_r_bounds([0.0, 2.0001], "planted")
 
 
 def test_artifact_every_sigma_is_below_the_popoviciu_bound():

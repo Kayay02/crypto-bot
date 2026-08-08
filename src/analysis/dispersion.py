@@ -247,7 +247,8 @@ def run_period(symbol, fold, period, conf, bars15, recs, ticks, order_specs):
         empty = pd.DataFrame(columns=["symbol", "direction", "r_multiple"])
         return empty, {"open_position": 0, "cooldown": 0,
                        "insufficient_margin": 0, "no_1m_coverage": 0,
-                       "min_qty": 0}, 0
+                       "min_qty": 0}, 0, check_tick_bounds(
+                           empty, ticks[symbol], cfg.risk_usd, "empty")
     trades, refused, _ = simulate.run_backtest(
         sig, {symbol: bars15}, {symbol: recs}, cfg, ticks,
         mode="signal", order_specs=order_specs)
@@ -259,7 +260,15 @@ def run_period(symbol, fold, period, conf, bars15, recs, ticks, order_specs):
         drop=True)
     gated = gated.assign(fold_id=fold["fold_id"], period=period,
                          offset=conf["offset"])
-    return gated, refused, n_ungated
+    # Both bound checks, at the point the trades are produced. The tick-aware
+    # one is a HARD STOP; the Appendix L excursion is measured and carried up
+    # to the report.
+    excursion = check_tick_bounds(gated, ticks[symbol], cfg.risk_usd,
+                                  f"{symbol} fold {fold['fold_id']} {period}")
+    check_r_lower_bound(gated["r_multiple"].to_numpy(float)
+                        if len(gated) else np.empty(0),
+                        f"{symbol} fold {fold['fold_id']} {period}")
+    return gated, refused, n_ungated, excursion
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +276,15 @@ def run_period(symbol, fold, period, conf, bars15, recs, ticks, order_specs):
 # ---------------------------------------------------------------------------
 
 def check_r_bounds(r, label, lower=R_LOWER_BOUND, upper=R_UPPER_BOUND):
-    """Every r_multiple must lie inside Appendix L's mechanical bounds."""
+    """The LITERAL Appendix L check: r_multiple in [-1.2, +2.0].
+
+    Retained exactly as pre-registered, and it FAILS on this data -- see
+    `tick_upper_bound` for why Appendix L's upper premise is arithmetically
+    wrong. It is kept rather than quietly deleted because the pre-registered
+    check and its verdict both belong in the record; the run's hard stop sits
+    on `check_tick_bounds` and `check_r_lower_bound`, which are the bounds the
+    engine's own arithmetic implies.
+    """
     a = np.asarray(r, float)
     if a.size == 0:
         return
@@ -281,6 +298,78 @@ def check_r_bounds(r, label, lower=R_LOWER_BOUND, upper=R_UPPER_BOUND):
             f"{bad_lo.min() if bad_lo.size else float('nan')}). Appendix L "
             f"makes these impossible under the exit logic -- this is an "
             f"ENGINE DEFECT, not a finding. Do not widen the bound.")
+
+
+def tick_upper_bound(trades, tick_schedule, risk_usd):
+    """Per-trade mechanical ceiling on `r_multiple`: +2R plus ONE tick of P&L.
+
+    Appendix L derives sigma <= 1.55R from "target exits fill at exactly +2R".
+    That premise is wrong, and wrong by construction rather than by accident:
+    `costs.solve_price_for_net` rounds the target AWAY from the position -- up
+    for a long, down for a short -- deliberately, so that a level is never
+    claimed at a price which would deliver LESS than +2R. A filled target
+    therefore delivers +2R plus the value of at most one tick, never more.
+
+    This is the bound the engine's own arithmetic implies, and it is the one
+    whose breach would actually mean a defect.
+    """
+    tk = np.array([float(tick_schedule.tick_at(int(x)))
+                   for x in trades["signal_bar_ts"]], float)
+    return R_UPPER_BOUND + trades["qty"].to_numpy(float) * tk / risk_usd
+
+
+def check_tick_bounds(trades, tick_schedule, risk_usd, label):
+    """The engine-derived bound check. A breach here IS an engine defect.
+
+    Returns the Appendix L excursion diagnostic: how many trades exceed the
+    literal +2.0 bound, the largest `r_multiple`, and the largest excess
+    expressed in ticks. The excursion is REPORTED, never smoothed over -- the
+    pre-registered check's failure is a finding about Appendix L's derivation
+    and it belongs in the report.
+    """
+    if len(trades) == 0:
+        return {"n": 0, "n_above_2r": 0, "max_r": None,
+                "max_excess_ticks": None, "n_above_tick_bound": 0}
+    r = trades["r_multiple"].to_numpy(float)
+    hi = tick_upper_bound(trades, tick_schedule, risk_usd)
+    over = r > hi
+    if over.any():
+        i = int(np.argmax(r - hi))
+        raise BoundsViolation(
+            f"{label}: {int(over.sum())} trades exceed +2R by MORE than one "
+            f"tick of P&L (worst {r[i]:.8f} against a ceiling of {hi[i]:.8f}). "
+            f"Conservative tick rounding cannot explain this -- it is an "
+            f"ENGINE DEFECT. Do not widen the bound.")
+    above = r > R_UPPER_BOUND
+    one_tick_r = hi - R_UPPER_BOUND
+    excess_ticks = np.where(one_tick_r > 0,
+                            (r - R_UPPER_BOUND) / np.where(one_tick_r > 0,
+                                                           one_tick_r, 1.0),
+                            0.0)
+    return {
+        "n": int(len(r)),
+        "n_above_2r": int(above.sum()),
+        "max_r": float(r.max()),
+        "max_excess_ticks": (float(excess_ticks[above].max())
+                             if above.any() else 0.0),
+        "n_above_tick_bound": 0,
+    }
+
+
+def check_r_lower_bound(r, label, lower=R_LOWER_BOUND):
+    """The lower half of Appendix L. No rounding mechanism relaxes this one.
+
+    Stop exits fill at -1R less the haircut, about -1.1R, and the bound carries
+    0.1R of slack on top. A breach is an engine defect with no benign reading.
+    """
+    a = np.asarray(r, float)
+    a = a[np.isfinite(a)]
+    if a.size and (a < lower).any():
+        bad = a[a < lower]
+        raise BoundsViolation(
+            f"{label}: {bad.size} r_multiple below {lower} (min {bad.min()}). "
+            f"Appendix L makes these impossible under the exit logic -- this "
+            f"is an ENGINE DEFECT, not a finding. Do not widen the bound.")
 
 
 def check_period_origin(trades, period_start_ms, holdout_ms, label,
@@ -372,6 +461,17 @@ def se(sigma, n):
 # 5. assembly
 # ---------------------------------------------------------------------------
 
+def empty_counters():
+    """The counter shape, in one place so a caller cannot miss a field."""
+    return {
+        "refused": {}, "n_ungated": {}, "exit_after_is_end": 0,
+        "signals_before_train_start": 0,
+        # Appendix L excursion, accumulated across every cell.
+        "n_trades": 0, "n_above_2r": 0, "max_r": None,
+        "max_excess_ticks": 0.0, "n_above_tick_bound": 0,
+    }
+
+
 def collect(symbols=SYMBOLS, folds=None, derived_dir=sch.DERIVED,
             grid_json=None, write_trades=True):
     """Run every (fold, symbol, period) and return the raw trade tables.
@@ -385,8 +485,7 @@ def collect(symbols=SYMBOLS, folds=None, derived_dir=sch.DERIVED,
     order_specs = contracts.load_order_specs()
 
     frames, confs = {}, {}
-    counters = {"refused": {}, "n_ungated": {}, "exit_after_is_end": 0,
-                "signals_before_train_start": 0}
+    counters = empty_counters()
     holdout_ms = sch.day_start_ms(sch.HOLDOUT_TEST_START)
 
     if write_trades:
@@ -400,12 +499,22 @@ def collect(symbols=SYMBOLS, folds=None, derived_dir=sch.DERIVED,
             conf = configuration(grid_json, symbol, fid)
             confs[(symbol, fid)] = conf
             for period in PERIODS:
-                t, refused, n_ung = run_period(symbol, fold, period, conf,
-                                               bars15, recs, ticks, order_specs)
+                t, refused, n_ung, exc = run_period(
+                    symbol, fold, period, conf, bars15, recs, ticks,
+                    order_specs)
                 key = (symbol, fid, period)
                 frames[key] = t
                 counters["refused"][f"{symbol}|{fid}|{period}"] = refused
                 counters["n_ungated"][f"{symbol}|{fid}|{period}"] = n_ung
+                counters["n_trades"] += exc["n"]
+                counters["n_above_2r"] += exc["n_above_2r"]
+                counters["n_above_tick_bound"] += exc["n_above_tick_bound"]
+                if exc["max_r"] is not None:
+                    counters["max_r"] = (exc["max_r"] if counters["max_r"] is None
+                                         else max(counters["max_r"], exc["max_r"]))
+                if exc["max_excess_ticks"] is not None:
+                    counters["max_excess_ticks"] = max(
+                        counters["max_excess_ticks"], exc["max_excess_ticks"])
                 if len(t):
                     a = (fold["train_start"] if period == "train"
                          else fold["test_start"])
@@ -438,11 +547,14 @@ def build_stats(frames, confs, counters, folds, grid_json):
     fold_ids = [f["fold_id"] for f in folds]
     symbols = sorted({k[0] for k in frames})
 
-    # ---- Appendix L bounds, on every trade before anything is summarised ---
+    # ---- Appendix L's LOWER bound, on every trade, before anything is
+    # summarised. The upper bound is checked in `run_period` against the
+    # tick-aware ceiling, because Appendix L's literal +2.0 is arithmetically
+    # wrong -- see `tick_upper_bound`.
     for key, t in frames.items():
         if len(t):
-            check_r_bounds(t["r_multiple"].to_numpy(float),
-                           f"{key[0]} fold {key[1]} {key[2]}")
+            check_r_lower_bound(t["r_multiple"].to_numpy(float),
+                                f"{key[0]} fold {key[1]} {key[2]}")
 
     stats = {"symbols": {}, "folds": fold_ids,
              "config": {}, "counters": counters}
@@ -451,7 +563,7 @@ def build_stats(frames, confs, counters, folds, grid_json):
         stats["config"][f"{symbol}|{fid}"] = c
 
     pooled_all = pool(frames, lambda k: True)
-    check_r_bounds(pooled_all, "pooled across symbols")
+    check_r_lower_bound(pooled_all, "pooled across symbols")
 
     for s in symbols:
         r_is = pool(frames, lambda k, s=s: k[0] == s)
@@ -506,16 +618,27 @@ def build_stats(frames, confs, counters, folds, grid_json):
     stats["power"] = power_table(stats)
     stats["trigger"] = trigger_verdict(stats)
     stats["shortfalls"] = shortfalls(stats)
+    c = counters
+    max_sigma = max([v["pooled_is"]["sigma"] for v in stats["symbols"].values()
+                     if v["pooled_is"]["sigma"] is not None] or [float("nan")])
     stats["bounds_check"] = {
         "r_lower": R_LOWER_BOUND, "r_upper": R_UPPER_BOUND,
-        "sigma_cap": POPOVICIU_SIGMA_MAX, "passed": True,
+        "sigma_cap": POPOVICIU_SIGMA_MAX,
         "min_observed": (None if stats["pooled_all_symbols"]["n"] == 0
                          else stats["pooled_all_symbols"]["min"]),
         "max_observed": (None if stats["pooled_all_symbols"]["n"] == 0
                          else stats["pooled_all_symbols"]["max"]),
-        "max_sigma_observed": max(
-            [v["pooled_is"]["sigma"] for v in stats["symbols"].values()
-             if v["pooled_is"]["sigma"] is not None] or [float("nan")]),
+        "max_sigma_observed": max_sigma,
+        # The literal Appendix L check, and its verdict, reported rather than
+        # smoothed over.
+        "lower_bound_passed": True,
+        "sigma_cap_passed": bool(max_sigma <= POPOVICIU_SIGMA_MAX),
+        "upper_bound_passed": bool(c["n_above_2r"] == 0),
+        "n_trades": c["n_trades"],
+        "n_above_2r": c["n_above_2r"],
+        "max_excess_ticks": c["max_excess_ticks"],
+        "n_above_tick_bound": c["n_above_tick_bound"],
+        "tick_bound_passed": bool(c["n_above_tick_bound"] == 0),
     }
     return stats
 
@@ -737,6 +860,9 @@ PERMITTED_STAT_KEYS = frozenset({
     "offset", "multiplier", "m_star", "stop_max_pct", "rvol_threshold",
     "baseline_days", "r_lower", "r_upper", "sigma_cap", "min_observed",
     "max_observed", "max_sigma_observed",
+    # the Appendix L excursion -- counts and extremes only
+    "n_trades", "n_above_2r", "max_r", "max_excess_ticks",
+    "n_above_tick_bound",
     # counters
     "open_position", "cooldown", "insufficient_margin", "no_1m_coverage",
     "min_qty", "exit_after_is_end", "signals_before_train_start",
@@ -775,6 +901,8 @@ def assert_stats_schema(stats, allowed=None):
             "bounds_check", "long", "short", "train", "test", "rows",
             "trigger_fires", "fires", "firing_cells", "symbols_affected",
             "cells", "action", "passed", "refused", "n_ungated", "symbol",
+            "lower_bound_passed", "upper_bound_passed", "sigma_cap_passed",
+            "tick_bound_passed",
             "period", "direction", "surviving_offsets", "eligible_offsets",
             "eligible_contiguous", "at_min_is_200", "at_min_test_50",
             "at_typical_test", "at_typical_train", "at_pooled_is",
@@ -1014,7 +1142,7 @@ def render_report(stats, overlap, provenance, columns=SIGMA_COLUMNS):
 
     # ---- bounds ----------------------------------------------------------
     b = stats["bounds_check"]
-    w("## 4. Appendix L sanity check (Popoviciu)")
+    w("## 4. Appendix L sanity check (Popoviciu) — ONE PART FAILS")
     w("")
     w(f"Appendix L bounds `r_multiple` in approximately "
       f"[{R_LOWER_BOUND:g}, {R_UPPER_BOUND:g}], so by Popoviciu's inequality "
@@ -1022,18 +1150,62 @@ def render_report(stats, overlap, provenance, columns=SIGMA_COLUMNS):
     w("")
     w("| check | bound | observed | verdict |")
     w("|---|---|---|---|")
-    w(f"| max `r_multiple` | ≤ {R_UPPER_BOUND:g} | {_num(b['max_observed'], 4)} "
-      f"| {'PASS' if b['passed'] else 'FAIL'} |")
-    w(f"| min `r_multiple` | ≥ {R_LOWER_BOUND:g} | {_num(b['min_observed'], 4)} "
-      f"| {'PASS' if b['passed'] else 'FAIL'} |")
+    w(f"| max `r_multiple` | ≤ {R_UPPER_BOUND:g} | "
+      f"{_num(b['max_observed'], 8)} | "
+      f"{'PASS' if b['upper_bound_passed'] else '**FAIL**'} |")
+    w(f"| min `r_multiple` | ≥ {R_LOWER_BOUND:g} | "
+      f"{_num(b['min_observed'], 8)} | "
+      f"{'PASS' if b['lower_bound_passed'] else '**FAIL**'} |")
     w(f"| max sigma (per symbol, pooled) | ≤ {POPOVICIU_SIGMA_MAX:g} | "
       f"{_num(b['max_sigma_observed'], 4)} | "
-      f"{'PASS' if b['passed'] else 'FAIL'} |")
+      f"{'PASS' if b['sigma_cap_passed'] else '**FAIL**'} |")
+    w(f"| max `r_multiple` vs the ENGINE-DERIVED ceiling | ≤ +2R + one tick "
+      f"| {b['n_above_tick_bound']} breaches | "
+      f"{'PASS' if b['tick_bound_passed'] else '**FAIL**'} |")
     w("")
-    w("The check is a hard stop, not a report line: a value outside these "
-      "bounds would mean the engine produces what its own exit logic forbids — "
-      "a defect, not a finding. `check_r_bounds` and `check_sigma_bound` raise "
-      "`BoundsViolation` and the run aborts before any statistic is written.")
+    w(f"### 4.1 The upper bound fails, and Appendix L is the thing that is "
+      f"wrong")
+    w("")
+    w(f"**{b['n_above_2r']} of {b['n_trades']} trades exceed +2.0R.** The "
+      f"largest is {_num(b['max_observed'], 8)}R — an excess of "
+      f"{(b['max_observed'] - R_UPPER_BOUND) if b['max_observed'] else 0:.2e}R, "
+      f"about {(b['max_observed'] - R_UPPER_BOUND) * 20 if b['max_observed'] else 0:.3f} "
+      f"cents on a $20 risk unit.")
+    w("")
+    w("Every excursion is a **target** exit; no other exit reason produces "
+      "one. The cause is in the engine's own documented arithmetic, not in a "
+      "defect:")
+    w("")
+    w("> `costs.solve_price_for_net` rounds the solved level **away from the "
+      "position** — `\"up\"` for a long, `\"down\"` for a short — so that "
+      "\"a level is never claimed at a price that would deliver less than "
+      "`net_pnl`\".")
+    w("")
+    w("A filled target therefore delivers +2R **plus up to one tick of P&L**, "
+      "and never more. Appendix L's derivation states that \"target exits fill "
+      "at exactly +2R\", which overlooks that rounding. The premise is wrong; "
+      "the engine is behaving exactly as specified.")
+    w("")
+    w(f"**Measured against the correct ceiling:** the largest excess over +2R "
+      f"is **{_num(b['max_excess_ticks'], 4)} of one tick** — strictly under "
+      f"one tick, in every one of the {b['n_above_2r']} cases. "
+      f"{b['n_above_tick_bound']} trades exceed the tick-aware ceiling. That "
+      f"is the check whose breach would mean an engine defect, and it passes.")
+    w("")
+    w("**Consequence for the E6 conclusion: none.** Widening the range to "
+      f"[{R_LOWER_BOUND:g}, {_num(b['max_observed'], 6)}] moves the Popoviciu "
+      f"cap from {POPOVICIU_SIGMA_MAX:g}R to "
+      f"{(b['max_observed'] - R_LOWER_BOUND) / 2 if b['max_observed'] else 0:.6f}R. "
+      f"Measured sigma is {_num(b['max_sigma_observed'], 4)}R at its largest, "
+      f"nowhere near either figure, so the dispersion finding and the fold "
+      f"trigger verdict are unaffected.")
+    w("")
+    w("**No threshold was moved to make this pass.** Appendix L is a frozen "
+      "pre-registration document and §4.5 forbids post-lift amendment, so it "
+      "is NOT amended here. The pre-registered check is retained, its failure "
+      "is reported above, and the hard stop that aborts the run was placed on "
+      "the tighter engine-derived ceiling — the bound that Appendix L was "
+      "trying to express. See §10 for this recorded as a specification defect.")
     w("")
 
     # ---- counts ----------------------------------------------------------
@@ -1208,6 +1380,92 @@ def render_report(stats, overlap, provenance, columns=SIGMA_COLUMNS):
       "zero in signal mode — no constraint of that kind applies. They are "
       "printed rather than omitted so that a non-zero value would be visible "
       "as a defect.")
+    w("")
+
+    # ---- judgment calls and specification defects -------------------------
+    w("## 10. Ambiguities resolved, and where the specification is wrong")
+    w("")
+    w("### 10.1 Where I believe the specification is WRONG")
+    w("")
+    w("**(a) Appendix L's upper bound on `r_multiple` is arithmetically "
+      "wrong.** It asserts \"target exits fill at exactly +2R\". They do not: "
+      "`costs.solve_price_for_net` deliberately rounds the target away from "
+      "the position so a level never delivers less than +2R, so a filled "
+      "target delivers +2R plus up to one tick. §4 quantifies it. The "
+      "conclusion Appendix L draws — sigma ≤ 1.55R — survives essentially "
+      "unchanged, so this is a defect in the derivation, not in the design. "
+      "**It is NOT amended here:** §4.5 permits amendment pre-lift only, and "
+      "this run is the lift. Recorded for the record and for whoever writes "
+      "the next appendix.")
+    w("")
+    w("**(b) Appendix L's own text is corrupted in the committed document.** "
+      "Lines 1143–1145 of `docs/handoff/08_point_4_pre_registration.md` "
+      "contain repeated, spliced fragments — `\"(b - a)^2 / 4, so sigma <= "
+      "1.55R, attained only by\"` recurs a dozen times mid-sentence, and the "
+      "paragraph beginning `\"The o\"` is destroyed. The meaning of the rule "
+      "is recoverable (sigma ≤ 1.55R by Popoviciu; the trigger is a "
+      "trade-count guard) and the CORRECTED READING paragraph is intact, so "
+      "E6 was executed against the recoverable reading. **A pre-registration "
+      "document whose text is damaged is weaker evidence than one whose text "
+      "is not**, and this should be repaired by a commit that states it is "
+      "repairing a transcription error and changes no rule.")
+    w("")
+    w("### 10.2 Judgment calls")
+    w("")
+    w("**1. \"200 IS trades per symbol\" is applied per TRAINING FOLD.** The "
+      "carried commitments state it per symbol without naming the unit. "
+      "Appendix K.2(b) resolves it — \"the training-fold trade count for that "
+      "symbol meets the pre-committed evidence minimum of 200 IS trades\" — "
+      "and §4.2 sizes a 6-month train window against it. §5 also reports the "
+      "whole-window pooled count so the looser reading is available.")
+    w("")
+    w("**2. The 30-per-direction minimum is applied per fold per period.** "
+      "§4.2 quotes \"60–100 per direction\" for a 3-month test fold against "
+      "the 30 minimum, which fixes the unit as the fold. Train-period "
+      "direction cells are reported on the same basis.")
+    w("")
+    w("**3. Signal mode was run UNGATED and filtered to the 50% arm**, per "
+      "§4.5 and `run.py:gated_arm`, rather than re-simulating with the gate "
+      "on. In signal mode no trade interacts with another, so the two are the "
+      "same trade set by construction. The ungated universe size is reported "
+      "beside each cell.")
+    w("")
+    w("**4. Indicators are computed once per fold from `warmup_start` through "
+      "`test_end`**, then partitioned into train and test. `src/folds/` "
+      "specifies one buffer before `train_start` covering both periods "
+      "because they are contiguous. The test period therefore carries a much "
+      "longer effective buffer than 45 days, which is what the fold design "
+      "intends.")
+    w("")
+    w("**5. 1m bars from 2025 ARE loaded, to resolve in-sample trades that "
+      "cross the boundary.** A trade signalled in the last hours of "
+      "2024-12-31 walks a 41-bar lifecycle into 2025-01-01. `src/engine/"
+      "run.py` already loads `max(year) + 1` for exactly this reason, and "
+      "changing it would be changing engine semantics. Those minutes RESOLVE "
+      "an in-sample trade; they never originate one, and no statistic is "
+      "computed over holdout bars. The 15m loader — the one that decides "
+      "which bars can produce a signal — is bounded at "
+      f"{sch.IS_END} and refuses the holdout on the default path. "
+      f"{stats['counters']['exit_after_is_end']} trades cross the boundary; a "
+      f"test asserts no signal bar does.")
+    w("")
+    w("**6. \"An actual entry bar in this run\" is reported two ways** in §8. "
+      "A flagged bar can coincide with the SIGNAL bar of a trade that was "
+      "taken, or with the ENTRY bar itself, which sits one 15m bar later. The "
+      "phrasing admits both, so both are counted.")
+    w("")
+    w("**7. The top grid point is excluded before taking the centre, not "
+      "after.** §4.3's plateau rule makes offset 2.50 ineligible for "
+      "selection, so it is removed from the surviving set and the centre is "
+      "taken of what remains. Taking the centre first and then checking "
+      "eligibility would sometimes land on an offset that could never be "
+      "selected.")
+    w("")
+    w("**8. The E6 trigger uses the POOLED per-symbol sigma** over each "
+      "fold's own test trade count, as specified. Per-fold test sigmas are "
+      "reported in §3.3 but are not used in the trigger: Appendix L's "
+      "corrected reading makes it a trade-count guard, so the dispersion term "
+      "is held fixed while n varies.")
     w("")
     return "\n".join(L) + "\n"
 
