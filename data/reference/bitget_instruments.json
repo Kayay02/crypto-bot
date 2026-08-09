@@ -1,0 +1,55 @@
+{
+  "instruments": {
+    "BTCUSDT": {
+      "min_notional_usdt": "5",
+      "min_trade_qty": "0.0001",
+      "observed_ask": 65172.7,
+      "observed_bid": 65172.6,
+      "observed_spread_ticks": 1.0,
+      "price": 65172.6,
+      "price_end_step": 1,
+      "price_field": "lastPr",
+      "price_place": 1,
+      "price_ts_ms": "1786297740217",
+      "qty_step": "0.0001",
+      "tick_size": 0.1
+    },
+    "ETHUSDT": {
+      "min_notional_usdt": "5",
+      "min_trade_qty": "0.01",
+      "observed_ask": 1922.39,
+      "observed_bid": 1922.38,
+      "observed_spread_ticks": 1.0,
+      "price": 1922.38,
+      "price_end_step": 1,
+      "price_field": "lastPr",
+      "price_place": 2,
+      "price_ts_ms": "1786297740217",
+      "qty_step": "0.01",
+      "tick_size": 0.01
+    },
+    "SOLUSDT": {
+      "min_notional_usdt": "5",
+      "min_trade_qty": "0.1",
+      "observed_ask": 77.126,
+      "observed_bid": 77.125,
+      "observed_spread_ticks": 1.0,
+      "price": 77.126,
+      "price_end_step": 1,
+      "price_field": "lastPr",
+      "price_place": 3,
+      "price_ts_ms": "1786297740217",
+      "qty_step": "0.1",
+      "tick_size": 0.001
+    }
+  },
+  "notes": "This floor bounds slippage under NORMAL spread conditions and nothing else.\n\nA stop-loss exit is a market order that fires during a fast adverse move --\nprecisely when spreads widen and top-of-book depth thins. The stop leg is ALWAYS\ntaker; it cannot be worked as a maker order, because the whole point of it is\nthat it must execute now. A tick-size floor therefore UNDERSTATES stop-leg\nslippage, by an unknown amount.\n\nThe headroom multiple (tolerable spread / one-tick floor) is the margin\navailable to absorb that widening. Where it is large the asymmetry is\nimmaterial; where it is small it is not, and this method cannot resolve it.\nThis module does NOT estimate how far spreads widen in fast markets -- that\nneeds data it does not have.\n",
+  "price_semantics": "A SINGLE POINT-IN-TIME reading per symbol, used only to convert a tick size into basis points. It is not a bar, not a series, not an input to any strategy or parameter, and no historical window or holdout was touched to obtain it.",
+  "retrieval_method": "automated",
+  "retrieved_at": "2026-08-09T17:48:59+00:00",
+  "source_urls": {
+    "contracts": "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES",
+    "tickers": "https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES"
+  },
+  "tick_size_derivation": "priceEndStep * 10**-pricePlace"
+}

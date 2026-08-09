@@ -65,3 +65,11 @@ __pycache__/
 !/data/reference/
 /data/reference/*
 !/data/reference/bitget_fees.json
+# bitget_instruments.json is report 18's provenance artifact: tick size, the
+# lot specs it cross-checks against the fee artifact, and ONE point-in-time
+# price per symbol used solely to convert a tick into basis points. The price
+# is why this must be dated and committed -- the slippage verdict is
+# price-conditional, and a commit proves which price it was taken at. It is a
+# reference reading, NOT a market data series: no bars, no history, nothing
+# from the holdout window. ~2 KB.
+!/data/reference/bitget_instruments.json
