@@ -42,6 +42,11 @@ __pycache__/
 # JSONL (~7k records) and the trade tables stay ignored -- both are
 # reproducible from this hash and are far too large to track.
 !/data/derived/sweep/sweep.json
+# bands.json is the step 3 deliverable: the K.2 acceptance verdict for every
+# grid point, the per-fold bands, the plateau selections and the kill-condition
+# verdicts. Step 4 is forbidden from revisiting step 3, so a committed copy
+# proves which numbers the collapse was performed against.
+!/data/derived/sweep/bands.json
 # e6_dispersion.json records the measured sigma, the per-fold trade counts and
 # the E6 trigger verdict, against the clean hash the lift was taken at. The
 # trigger is pre-committed and cannot be re-decided once sigma is known, so a
