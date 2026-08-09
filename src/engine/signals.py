@@ -186,7 +186,8 @@ def compute_indicators(df, params, baseline_days):
     return out
 
 
-def generate_signals(df, params, symbol, cfg, apply_rvol_gate=True):
+def generate_signals(df, params, symbol, cfg, apply_rvol_gate=True,
+                     apply_ema_filter=True):
     """Signal bars for one symbol. `df` must be 15m, ascending, deduped.
 
     Entry rule after 3R, long: EMA20 > EMA50 AND close > Donchian-20 upper AND
@@ -197,12 +198,30 @@ def generate_signals(df, params, symbol, cfg, apply_rvol_gate=True):
     Setting apply_rvol_gate=False produces the `ungated` variant over the
     identical bar universe, so the two are joinable on
     (symbol, signal_bar_ts, direction).
+
+    Setting apply_ema_filter=False produces the MINUS-EMA arm of section 4.5's
+    decomposition. Unlike the RVOL gate this cannot be applied as a filter of
+    the gated table -- dropping the trend condition ADMITS bars the baseline
+    never generated, so the arm is a SUPERSET and has to be simulated
+    separately. Both switches default to the baseline rule, so neither changes
+    engine semantics; a test asserts the defaults are bit-identical.
+
+    §4.5 pre-commits that EMA failing attribution is REPORTED AS A THESIS
+    FAILURE, NOT EXECUTED AS A DROP: the whole edge claim is trend
+    continuation, so a strategy without it is a different strategy.
     """
     ind = compute_indicators(df, params, cfg.baseline_days)
 
     close = ind["close"].to_numpy()
-    trend_up = ind["ema_fast"].to_numpy() > ind["ema_slow"].to_numpy()
-    trend_dn = ind["ema_fast"].to_numpy() < ind["ema_slow"].to_numpy()
+    if apply_ema_filter:
+        trend_up = ind["ema_fast"].to_numpy() > ind["ema_slow"].to_numpy()
+        trend_dn = ind["ema_fast"].to_numpy() < ind["ema_slow"].to_numpy()
+    else:
+        # Direction is then set by the BREAKOUT alone: a close above the upper
+        # channel is a long, below the lower channel a short. The bar universe
+        # widens; it does not become directionless.
+        trend_up = np.ones(len(ind), dtype=bool)
+        trend_dn = np.ones(len(ind), dtype=bool)
     brk_up = close > ind["donchian_upper"].to_numpy()
     brk_dn = close < ind["donchian_lower"].to_numpy()
     rvol = ind["rvol"].to_numpy()
