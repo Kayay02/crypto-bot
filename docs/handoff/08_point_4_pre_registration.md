@@ -1220,20 +1220,37 @@ M.2 — THE HOLDOUT SEAL HAS A GAP IN THE 1m PATH.
 Report 12 section 10.2 records that 1m bars from 2025 were loaded, so that an
 in-sample trade signalled in the closing hours of 2024-12-31 could resolve its
 41-bar lifecycle instead of exiting on missing data. That matches
-src/engine/run.py, which already loads max(year) + 1 for the same reason. ZERO
-trades crossed the boundary, so no holdout bar influenced any figure in report
-12. No contamination occurred.
+src/engine/run.py, which already loads max(year) + 1 for the same reason.
 
-The gap is structural rather than realised. Section 4.2's seal covers the
-src/folds/ loaders and NOT the engine's 1m path, which predates it. E6 ran one
-configuration per fold-symbol. The sweep runs eleven multipliers across three
-RVOL arms, and wider stops imply longer holds, so boundary crossings become
-materially more likely there than they were here.
+CORRECTED. Report 12 recorded no boundary crossings. FIVE OCCURRED. Five
+ungated SOLUSDT fold-9 trades crossed the boundary and were resolved using 2025
+1m bars. None of the five reached the gated 50% RVOL arm, so no reported E6
+figure was influenced: re-running E6 under the seal reproduces every figure
+byte-identically apart from the n_ungated provenance counter, which moves from
+678 to 673. Report 12's count was taken on the GATED table, while signal mode
+simulates the UNGATED universe, so it measured the wrong population. See report
+13 section 7.1.
 
-REQUIRED BEFORE THE SWEEP. The 1m loading path must refuse 2025-01-01 and later
-by default, on the same authorised=False pattern already used in src/folds/,
-with a mutation test proving that it refuses. A seal never shown to refuse is
-not a seal.
+This STRENGTHENS the case for the seal rather than weakening it. The gap was
+not merely structural; it was already being exercised. Section 4.2's seal
+covers the src/folds/ loaders and NOT the engine's 1m path, which predates it.
+E6 ran one configuration per fold-symbol. The sweep runs eleven multipliers
+across three RVOL arms, and wider stops imply longer holds, so boundary
+crossings become materially more likely there than they were here.
+
+REQUIRED BEFORE THE SWEEP. A LOADER REFUSAL ALONE IS NOT SUFFICIENT. Once the
+sealed years are simply not loaded, a crossing trade requests nothing: it runs
+off the end of the available records and exits insufficient_data, a fabricated
+outcome silently included in the population. Nothing objects, because nothing
+was asked. The seal therefore requires BOTH of:
+
+  a refusal in the 1m loading path, 2025-01-01 and later, on the same
+    authorised=False pattern already used in src/folds/; AND
+  a per-trade check on the DATA REQUIREMENT, evaluated before any 1m access,
+    which raises when a trade would need sealed data to resolve.
+
+Each needs a mutation test proving that it refuses. A seal never shown to
+refuse is not a seal. See report 13 section 1.2.
 
 M.3 — BOUNDARY-CROSSING TRADES ARE EXCLUDED. POST-LIFT DECISION.
 
@@ -1249,8 +1266,20 @@ outcome. Resolving with holdout bars would contaminate an in-sample result
 inside the very module that selects the candidate, which is the one place
 contamination cannot be tolerated.
 
-THIS DECISION IS POST-LIFT and is labelled as such. It affected zero trades in
-E6. It moves no threshold and changes no acceptance criterion.
+THIS DECISION IS POST-LIFT and is labelled as such. Applied to E6 it removes
+FIVE trades, all of them ungated SOLUSDT fold-9 trades, and NONE on the gated
+50% arm. Every other fold-symbol-period cell excludes nothing. It moves no
+threshold and changes no acceptance criterion.
+
+THE ERROR CORRECTED ABOVE WAS ONE OF POPULATION. The count was measured on the
+gated table rather than on the ungated universe that signal mode actually
+simulates. That is the same class of error as Appendix F.1, where m* was
+anchored on a bar population other than the one A3 measures binding over, and
+as Appendix H, where the cap was anchored on the median of that population
+rather than its P95, and as M.1, where a bound was asserted over a distribution
+the exit logic does not produce. A quantity measured or bounded on a different
+population from the one it governs looks correct and is wrong, and this project
+has now produced four of them.
 
 M.4 — THE D5 POOLED POPULATION MUST BE NAMED.
 
