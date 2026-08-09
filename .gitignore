@@ -56,3 +56,12 @@ __pycache__/
 !/data/derived/analysis/
 /data/derived/analysis/*
 !/data/derived/analysis/e6_dispersion.json
+# bitget_fees.json is a PROVENANCE artifact: a fee rate nobody can date is a
+# rate the admissibility line cannot be defended against. The commit is what
+# proves which schedule, retrieved when and from where, report 17's envelope
+# was derived from -- and src/costs/envelope.py refuses to run without it, so
+# an untracked copy would make the module unrunnable on a fresh clone. ~4 KB,
+# no market data in it.
+!/data/reference/
+/data/reference/*
+!/data/reference/bitget_fees.json

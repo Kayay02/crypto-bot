@@ -1,0 +1,62 @@
+{
+  "contract_specs": {
+    "BTCUSDT": {
+      "max_leverage": "150",
+      "min_notional_usdt": "5",
+      "min_trade_qty": "0.0001",
+      "price_decimals": "1",
+      "qty_decimals": "4",
+      "qty_step": "0.0001"
+    },
+    "ETHUSDT": {
+      "max_leverage": "150",
+      "min_notional_usdt": "5",
+      "min_trade_qty": "0.01",
+      "price_decimals": "2",
+      "qty_decimals": "2",
+      "qty_step": "0.01"
+    },
+    "SOLUSDT": {
+      "max_leverage": "100",
+      "min_notional_usdt": "5",
+      "min_trade_qty": "0.1",
+      "price_decimals": "3",
+      "qty_decimals": "1",
+      "qty_step": "0.1"
+    }
+  },
+  "contracts_seen": 741,
+  "corroborating_sources": [
+    {
+      "states": "0.02% maker / 0.06% taker for USDT-M futures, 'actual fee varies by account level'",
+      "url": "https://www.bitget.com/support/articles/12560603817155"
+    },
+    {
+      "states": "0.02% maker / 0.06% taker; BGB 20% deduction described as spot-only",
+      "url": "https://www.bitget.com/academy/Fee-Structure-and-Fee-Calculations-on-Bitget"
+    },
+    {
+      "states": "canonical human fee schedule; JS-rendered, returned no fee table to an automated fetch and was NOT used as the source of the recorded rates",
+      "url": "https://www.bitget.com/fee"
+    }
+  ],
+  "maker_rate": 0.0002,
+  "notes": "Rates are BASE TIER (regular user, no VIP level, no discount applied) and are decimal fractions: 0.0002 = 0.02% maker, 0.0006 = 0.06% taker per side. All 741 USDT-M perpetual contracts returned by the endpoint carry this same pair, so the rate is a product-level schedule, not a per-symbol one. CONDITIONALS FOUND: (1) VIP TIERS -- Bitget publishes a VIP ladder whose futures maker fee falls toward 0% and taker toward 0.02-0.03% at the top levels; it does NOT apply at base tier and the exact per-level thresholds could not be read, because the VIP page (bitget.com/vip/vipIntroduce) and the human fee schedule (bitget.com/fee) are both JS-rendered and return no table to a fetch. (2) BGB DISCOUNT -- Bitget's academy and support pages state the 20% fee reduction for paying fees in BGB applies to SPOT and MARGIN trading; the futures fee pages do not offer it. Third-party summaries disagree on this point, so it is recorded as NOT applying to USDT-M futures at base tier and flagged for operator confirmation against the account UI. (3) MAKER REBATE -- no negative maker fee or rebate programme is offered at base tier; rebate-grade maker pricing appears only at high VIP / market-maker levels. (4) PROMOTIONAL RATES -- none found applying to USDT-M perpetuals at base tier. Fee-rate promotions Bitget was publishing at retrieval time concerned stock / metal / commodity / index futures, which this project does not trade. NOT COVERED BY THESE RATES: funding payments, which are a separate transfer between longs and shorts on an 8-hour interval (fundInterval=8) and are not a fee.",
+  "product": "USDT-M perpetual futures",
+  "retrieval_method": "automated",
+  "retrieved_at": "2026-08-09T17:03:41+00:00",
+  "source_url": "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES",
+  "spec_units": {
+    "max_leverage": "x, exchange maximum for the symbol",
+    "min_notional_usdt": "USDT",
+    "min_trade_qty": "base-coin units (BTC / ETH / SOL)",
+    "qty_step": "base-coin units; order quantity must be a multiple"
+  },
+  "taker_rate": 0.0006,
+  "tier": "base tier (regular user, VIP 0 -- no volume, balance or BGB tier applied)",
+  "unverifiable_without_credentials": [
+    "the account's actual VIP / fee tier",
+    "whether a BGB fee deduction is switched on for the account",
+    "whether any maker rebate or market-maker programme applies"
+  ]
+}
