@@ -12,9 +12,15 @@ THE ARITHMETIC, AND THE ONE THING IT MAKES LEGIBLE
 
     f_eff     = maker_frac * f_maker + (1 - maker_frac) * f_taker
     notional  = R$ / s
-    cost_in_R = [ 2*f_eff + 2*(1 - maker_frac)*slip ] / s
-                + 2 * maker_frac * MAKER_NONFILL_COST_R
+    cost_in_R = [ 2*f_eff
+                + 2*(1 - maker_frac)*slip
+                + 2*maker_frac*MAKER_NONFILL_SLIP ] / s
     leverage  = notional / equity
+
+EVERY COST TERM IS A PRICE FRACTION AND THE DIVISION BY `s` HAPPENS ONCE. Fees,
+slippage and the maker chase distance are all distances between a price you
+wanted and a price you got; dividing their sum by the stop width converts the
+lot into R in one step. Nothing is added to that result afterwards.
 
 `s` is stop distance as a fraction of entry price. The factor of 2 is the round
 trip: entry and exit are each charged a fee.
@@ -30,8 +36,8 @@ exactly zero at maker_frac = 1.0.
 THE FLAT ALL-MAKER COLUMN IS OPTIMISTIC, AND DELIBERATELY SO. At
 maker_frac = 1.0 the slippage term vanishes and `s*` is flat at
 2*f_maker/tolerance. That is mechanically right and economically incomplete --
-see MAKER_NONFILL_COST_R below, which is the term that would fill the gap and
-is not measured.
+see MAKER_NONFILL_SLIP below, which is the term that would fill the gap and is
+not measured.
 
 EQUITY CANCELS. Under fixed-dollar risk the position is sized as notional = R$/s,
 so every dollar cost above carries a factor R$/s and dividing by R$ to express
@@ -113,9 +119,9 @@ test. It is not modified in this step, and a later step that wants a different
 budget must say so as an amendment with its own reasoning, not edit this line.
 """
 
-MAKER_NONFILL_COST_R = 0.0
-"""Cost in R of ONE maker leg failing to fill. UNMODELLED. A placeholder, NOT a
-measurement.
+MAKER_NONFILL_SLIP = 0.0
+"""Chase distance for ONE maker leg that fails to fill, AS A FRACTION OF PRICE.
+UNMODELLED. A placeholder, NOT a measurement.
 
 WHAT IT STANDS FOR. A resting limit order fails to fill precisely when price is
 moving away from the rest. The leg then has to be chased at a worse price, or
@@ -123,28 +129,54 @@ the trade is missed. That is adverse selection, and it is correlated with
 exactly the conditions in which the entry mattered -- it is not a symmetric
 noise term that averages out.
 
+UNITS: A PRICE FRACTION, AND THE NAME SAYS SO. Dimensionally identical to
+`slip`, and for the same reason: both are a distance between the price you
+wanted and the price you got. It therefore sits in the `price_cost_rate`
+numerator alongside `slip` and is divided by `s` exactly once, with everything
+else.
+
+WHY NOT R. It was originally named MAKER_NONFILL_COST_R and placed outside the
+division, which is a consistent R denomination -- but the wrong one. Chasing a
+leg twenty basis points is the same twenty basis points whether the stop behind
+it is 0.5% or 5%. Denominating the chase in R asserts the opposite: it would
+make an identical chase cost a FIXED FRACTION OF RISK, so a strategy could
+shrink the cost of its own missed fills by widening its stop. That inverts the
+causality -- the stop does not reach back and change what the order book did.
+Under the correct denomination a wider stop does reduce the chase's cost in R,
+but as a consequence of dividing a fixed price distance by a larger `s`, which
+is exactly how `slip` and the fees already behave.
+
+The two placements differ by a factor of 1/s -- 20x at s = 5% to 200x at
+s = 0.5% -- so this is not a presentational choice. At the current value of
+zero they are numerically indistinguishable, which is precisely why the
+placement is pinned by a unit-consistency test and a planted mutation rather
+than by a comment.
+
 SETTING IT TO ZERO IS A KNOWN UNDERSTATEMENT OF MAKER-EXECUTION COST. It is
 zero here because no measurement of it exists, and inventing a number would be
 worse than carrying an explicit hole. The consequence, stated so it cannot be
-read past: THE FLAT ALL-MAKER COLUMN OF THE ADMISSIBILITY TABLE IS OPTIMISTIC.
-At maker_frac = 1.0 the model says slippage is free and the true cost of
-all-maker execution is entirely in this term, which is set to zero. Any
-conclusion of the form "just use maker execution" is therefore reading a
-number the model does not actually have.
+read past:
 
-WHY IT IS IN THE EXPRESSION RATHER THAN THE PROSE. `cost_in_r` adds it
+    THE FLAT ALL-MAKER COLUMN OF REPORT 17'S ADMISSIBILITY TABLE IS OPTIMISTIC,
+    AND SO IS THE ENTIRE `UNCON` COLUMN OF ITS BREAK-EVEN TABLE. NEITHER MAY BE
+    DESIGNED AROUND.
+
+At maker_frac = 1.0 the model says execution is free of everything except two
+maker fees, and the whole true cost of all-maker execution sits in this term,
+which is zero. Any conclusion of the form "just use maker execution" is reading
+a number the model does not have.
+
+WHY IT IS IN THE EXPRESSION RATHER THAN THE PROSE. `price_cost_rate` carries it
 structurally, so no cost figure can be produced without the term being present
 in the computation that produced it. Set it non-zero and every table in report
 17 moves; a test asserts that propagation, so the term cannot rot into a
 decorative constant that nothing reads.
 
-UNITS AND SCALING. Per MAKER LEG, in R. A round trip has 2*maker_frac maker
-legs, so the contribution is 2*maker_frac*MAKER_NONFILL_COST_R and it vanishes
-at maker_frac = 0, where there are no maker legs to fail to fill. It does NOT
-scale with `s`: a missed fill is a missed opportunity, not a price-proportional
-charge, so unlike the fee and slippage terms it is not divided by the stop
-width. Both of those shape choices are themselves unverified -- they are the
-least-wrong placement for a term whose magnitude is unknown, not findings.
+SCALING. Per MAKER LEG. A round trip has 2*maker_frac maker legs, so the
+contribution is 2*maker_frac*MAKER_NONFILL_SLIP and it vanishes at
+maker_frac = 0, where there are no maker legs to fail to fill. That the cost is
+linear in the number of maker legs is unverified -- it is the least-wrong shape
+for a term whose magnitude is unknown, not a finding.
 
 DO NOT estimate a value for this in the cost-envelope step. It needs fill data.
 """
@@ -308,28 +340,36 @@ def _check_s_and_slip(s, slip):
 
 
 def price_cost_rate(maker_frac, slip, fees):
-    """Round-trip price-proportional cost, as a fraction of price.
+    """Round-trip price-proportional cost, as a fraction of PRICE.
 
-        2*f_eff + 2*(1 - maker_frac)*slip
+        2*f_eff + 2*(1 - maker_frac)*slip + 2*maker_frac*MAKER_NONFILL_SLIP
 
-    Both legs pay a fee; only the TAKER legs pay slippage. Factored out so the
-    forward function and both inverses share one expression -- three copies of
-    it would be three places for the (1 - maker_frac) factor to be dropped
-    independently.
+    Every term here is a price fraction, which is what makes it legitimate to
+    divide the whole thing by `s` exactly once. Both legs pay a fee; the TAKER
+    legs pay slippage; the MAKER legs pay a chase distance. Factored out so the
+    forward function and both inverses share ONE expression -- separate copies
+    would be separate places for a factor to be dropped, or for a term to drift
+    to the wrong side of the division.
     """
     f_eff = effective_fee_rate(maker_frac, fees)
-    return 2.0 * f_eff + 2.0 * (1.0 - maker_frac) * slip
+    return (2.0 * f_eff
+            + 2.0 * (1.0 - maker_frac) * slip
+            + 2.0 * maker_frac * MAKER_NONFILL_SLIP)
 
 
-def nonfill_cost_r(maker_frac):
-    """Contribution of the UNMODELLED maker non-fill term, in R.
+def nonfill_rate(maker_frac):
+    """Contribution of the UNMODELLED maker non-fill term, as a PRICE FRACTION.
 
-    2*maker_frac maker legs, each carrying MAKER_NONFILL_COST_R. Zero today,
+    2*maker_frac maker legs, each carrying MAKER_NONFILL_SLIP. Zero today,
     because the constant is zero. Read its docstring before using any all-maker
     figure this module produces.
+
+    Named `nonfill_rate`, not `nonfill_cost_r`. The old name asserted R
+    denomination and the old placement honoured it; both were wrong, and a name
+    that keeps asserting the wrong unit is how the error would come back.
     """
     _check_maker_frac(maker_frac)
-    return 2.0 * maker_frac * MAKER_NONFILL_COST_R
+    return 2.0 * maker_frac * MAKER_NONFILL_SLIP
 
 
 def cost_in_r(s, maker_frac, slip, fees):
@@ -347,10 +387,19 @@ def cost_in_r(s, maker_frac, slip, fees):
       - dropping (1 - maker_frac) from the slippage term restores the first
         pass's error, which is invisible at maker_frac = 0 -- the all-taker
         column is identical under both models -- and only shows up in columns
-        the eye is least likely to check.
+        the eye is least likely to check;
+      - moving MAKER_NONFILL_SLIP outside the division by `s` re-denominates it
+        from a price fraction into R, which is wrong by a factor of 1/s -- 20x
+        to 200x across the s axis -- and is undetectable at its current value
+        of zero.
+
+    ONE DIVISION BY `s`, APPLIED ONCE, TO EVERYTHING. Every term in
+    `price_cost_rate` is a price fraction; dividing their sum by `s` converts
+    the lot into R in a single step. Nothing may be added to this result
+    afterwards without being denominated in R first, and nothing currently is.
     """
     _check_s_and_slip(s, slip)
-    return price_cost_rate(maker_frac, slip, fees) / s + nonfill_cost_r(maker_frac)
+    return price_cost_rate(maker_frac, slip, fees) / s
 
 
 def notional(s, risk_dollars=RISK_DOLLARS):
@@ -370,26 +419,22 @@ def implied_leverage(s, risk_dollars=RISK_DOLLARS, equity=EQUITY):
     return notional(s, risk_dollars) / equity
 
 
-def _net_tolerance(tolerance_r, maker_frac):
-    """Budget left for price-proportional costs after the non-fill term.
+def _check_tolerance(tolerance_r):
+    """Validate the budget.
 
-    The non-fill term does not scale with `s`, so it comes off the budget
-    before either inverse is solved rather than appearing inside them. With
-    MAKER_NONFILL_COST_R = 0 this is exactly `tolerance_r` and both closed
-    forms reduce to the published ones.
+    REPLACES `_net_tolerance`, which subtracted the non-fill term from the
+    budget before solving. That was the R-denominated treatment's bookkeeping:
+    a cost that did not scale with `s` had to be taken off the top because it
+    could not appear inside a numerator that gets divided by `s`. Under
+    price-fraction denomination the term sits in the numerator with the others
+    and the budget is untouched, so the subtraction -- and the "consumes the
+    entire budget" failure mode it needed -- both disappear.
     """
     if not math.isfinite(tolerance_r) or tolerance_r <= 0.0:
         raise ValueError(
             "tolerance_r must be positive and finite, got %r" % (tolerance_r,)
         )
-    net = tolerance_r - nonfill_cost_r(maker_frac)
-    if net <= 0.0:
-        raise ValueError(
-            "the unmodelled maker non-fill term (%r per leg at maker_frac=%r) "
-            "consumes the entire %r budget; no stop is admissible and the "
-            "inverse has no solution" % (MAKER_NONFILL_COST_R, maker_frac, tolerance_r)
-        )
-    return net
+    return tolerance_r
 
 
 def min_admissible_stop(tolerance_r, maker_frac, slip, fees):
@@ -397,7 +442,9 @@ def min_admissible_stop(tolerance_r, maker_frac, slip, fees):
 
     Closed form, by solving cost_in_R = tolerance_r for s:
 
-        s* = [ 2*f_eff + 2*(1 - maker_frac)*slip ] / tolerance_r
+        s* = [ 2*f_eff
+             + 2*(1 - maker_frac)*slip
+             + 2*maker_frac*MAKER_NONFILL_SLIP ] / tolerance_r
 
     Any s >= s* is admissible; cost_in_r is strictly decreasing in s, so the
     admissible set is the half-line above s*. Solved rather than searched --
@@ -410,10 +457,10 @@ def min_admissible_stop(tolerance_r, maker_frac, slip, fees):
     2/tol at every maker fraction; that was an artifact of charging slippage on
     maker legs, not a property of the cost structure.
     """
-    net = _net_tolerance(tolerance_r, maker_frac)
+    tol = _check_tolerance(tolerance_r)
     if not math.isfinite(slip) or slip < 0.0:
         raise ValueError("slip must be non-negative and finite, got %r" % (slip,))
-    return price_cost_rate(maker_frac, slip, fees) / net
+    return price_cost_rate(maker_frac, slip, fees) / tol
 
 
 #: Returned by `max_tolerable_slip` when no amount of slippage can breach the
@@ -428,7 +475,13 @@ def max_tolerable_slip(s, maker_frac, tolerance_r, fees):
 
     Solving cost_in_R = tolerance_r for slip:
 
-        slip_max = [ tolerance_r * s - 2*f_eff ] / [ 2 * (1 - maker_frac) ]
+        slip_max = [ tolerance_r * s
+                   - 2*f_eff
+                   - 2*maker_frac*MAKER_NONFILL_SLIP ] / [ 2 * (1 - maker_frac) ]
+
+    The fixed component is read back out of `price_cost_rate` at slip = 0
+    rather than being rewritten here, so the non-fill term cannot be present in
+    the forward function and quietly absent from its inverse.
 
     WHY THIS AND NOT A SENSITIVITY SWEEP. Sweeping `s*` across an assumed
     slippage interval measures the interval, not the strategy: pick a wider
@@ -452,13 +505,15 @@ def max_tolerable_slip(s, maker_frac, tolerance_r, fees):
     over, and reads as a real bound while being a category error. `None` fails
     at the point of use.
     """
-    net = _net_tolerance(tolerance_r, maker_frac)
+    tol = _check_tolerance(tolerance_r)
     if not math.isfinite(s) or s <= 0.0:
         raise ValueError("stop fraction s must be positive and finite, got %r" % (s,))
     _check_maker_frac(maker_frac)
 
-    fee_component = 2.0 * effective_fee_rate(maker_frac, fees)
-    budget = net * s - fee_component
+    # Everything that does not depend on slip, taken from the one expression
+    # that defines the model rather than restated here.
+    fixed_component = price_cost_rate(maker_frac, 0.0, fees)
+    budget = tol * s - fixed_component
 
     if maker_frac == 1.0:
         # No taker legs: slip has no coefficient to divide by.

@@ -573,13 +573,84 @@ def test_max_tolerable_slip_rejects_bad_inputs(fees):
 # ---------------------------------------------------------------------------
 
 def test_maker_nonfill_term_is_zero_and_declared_unmodelled():
-    assert ev.MAKER_NONFILL_COST_R == 0.0
-    doc = ev.__doc__ + (ev.nonfill_cost_r.__doc__ or "")
+    assert ev.MAKER_NONFILL_SLIP == 0.0
+    doc = ev.__doc__ + (ev.nonfill_rate.__doc__ or "")
     src = open(ev.__file__).read().lower()
     # The docstring must say what it is, in terms a reader cannot skim past.
-    for phrase in ("unmodelled", "understatement", "optimistic"):
-        assert phrase in src, "MAKER_NONFILL_COST_R docstring lost %r" % phrase
+    for phrase in ("unmodelled", "understatement", "optimistic",
+                   "fraction of price", "uncon"):
+        assert phrase in src, "MAKER_NONFILL_SLIP docstring lost %r" % phrase
     assert doc
+    # The old R-denominated name must not survive as an IDENTIFIER: a name that
+    # keeps asserting the wrong unit is how the ambiguity comes back. It is
+    # allowed to appear in prose, where it records what was corrected and why.
+    import ast
+    tree = ast.parse(open(ev.__file__).read())
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            names.add(node.name)
+    assert "MAKER_NONFILL_COST_R" not in names
+    assert "nonfill_cost_r" not in names
+    assert "MAKER_NONFILL_SLIP" in names
+
+
+def test_maker_nonfill_term_is_a_price_fraction_not_an_r_quantity(monkeypatch, fees):
+    """UNIT-CONSISTENCY GUARD. Fails on the PLACEMENT, not merely on the value.
+
+    THE AMBIGUITY THIS PINS. The term can sit in either of two places:
+
+        price-fraction : (2*f_eff + 2*(1-mf)*slip + 2*mf*C) / s
+        R-denominated  : (2*f_eff + 2*(1-mf)*slip) / s + 2*mf*C
+
+    They differ by a factor of 1/s on that term -- 20x at s = 5%, 200x at
+    s = 0.5%. At C = 0 they are numerically identical, so no ordinary test can
+    tell them apart. This one raises C to a non-zero probe and pins the
+    placement at TWO values of s, which is what makes it a unit test rather
+    than a value test: a constant offset cannot fit both.
+    """
+    probe = 0.0005
+    mf, slip = 0.5, 0.0002
+    f_eff = ev.effective_fee_rate(mf, fees)
+    shared = 2.0 * f_eff + 2.0 * (1.0 - mf) * slip
+
+    monkeypatch.setattr(ev, "MAKER_NONFILL_SLIP", probe)
+    for s in (0.005, 0.05):
+        price_fraction = (shared + 2.0 * mf * probe) / s
+        r_denominated = shared / s + 2.0 * mf * probe
+
+        assert ev.cost_in_r(s, mf, slip, fees) == pytest.approx(
+            price_fraction, rel=1e-12)
+        assert ev.cost_in_r(s, mf, slip, fees) != pytest.approx(
+            r_denominated, rel=1e-9)
+        # The two candidate placements really are distinguishable here.
+        assert price_fraction != pytest.approx(r_denominated, rel=1e-9)
+
+    # THE DISCRIMINATING FACT: the gap between the two placements is itself
+    # s-dependent (it is 2*mf*probe*(1/s - 1)), so it is 10x larger at
+    # s = 0.005 than at s = 0.05. No single R-denominated constant can
+    # reproduce the price-fraction answer at both s. Asserting the ratio is
+    # what makes this a test of the DIVISION, not of the number.
+    gaps = []
+    for s in (0.005, 0.05):
+        gaps.append(ev.cost_in_r(s, mf, slip, fees) - (shared / s + 2.0 * mf * probe))
+    assert gaps[0] / gaps[1] == pytest.approx(
+        (1.0 / 0.005 - 1.0) / (1.0 / 0.05 - 1.0), rel=1e-9)
+
+    # The term must scale like slip, because it IS dimensionally slip: adding
+    # `d` to MAKER_NONFILL_SLIP at all-maker must move cost by exactly the same
+    # amount as adding `d` to slip does at all-taker.
+    base_maker = ev.cost_in_r(0.02, 1.0, 0.0, fees)
+    monkeypatch.setattr(ev, "MAKER_NONFILL_SLIP", probe * 2.0)
+    bumped_maker = ev.cost_in_r(0.02, 1.0, 0.0, fees)
+    monkeypatch.setattr(ev, "MAKER_NONFILL_SLIP", 0.0)
+    taker_delta = (ev.cost_in_r(0.02, 0.0, probe, fees)
+                   - ev.cost_in_r(0.02, 0.0, 0.0, fees))
+    assert bumped_maker - base_maker == pytest.approx(taker_delta, rel=1e-12)
 
 
 def test_maker_nonfill_term_is_structurally_present_in_cost_in_r(monkeypatch, fees):
@@ -591,34 +662,49 @@ def test_maker_nonfill_term_is_structurally_present_in_cost_in_r(monkeypatch, fe
     edit that deletes the term as dead code fails here.
     """
     s, slip = 0.02, 0.0003
+    probe = 0.0002  # a plausible-magnitude chase distance: 2 bps.
     before = {mf: ev.cost_in_r(s, mf, slip, fees) for mf in ev.MAKER_FRAC_AXIS}
 
-    monkeypatch.setattr(ev, "MAKER_NONFILL_COST_R", 0.01)
+    monkeypatch.setattr(ev, "MAKER_NONFILL_SLIP", probe)
     for mf in ev.MAKER_FRAC_AXIS:
         after = ev.cost_in_r(s, mf, slip, fees)
-        assert after == pytest.approx(before[mf] + 2.0 * mf * 0.01, rel=1e-12)
+        # Price fraction: the term is divided by s along with everything else.
+        assert after == pytest.approx(before[mf] + 2.0 * mf * probe / s, rel=1e-12)
     # At all-taker there are no maker legs, so the term must NOT bite.
     assert ev.cost_in_r(s, 0.0, slip, fees) == pytest.approx(before[0.0], rel=1e-12)
     # At all-maker it is the entire difference.
-    assert ev.cost_in_r(s, 1.0, slip, fees) - before[1.0] == pytest.approx(0.02, rel=1e-12)
+    assert ev.cost_in_r(s, 1.0, slip, fees) - before[1.0] == pytest.approx(
+        2.0 * probe / s, rel=1e-12)
 
     # And it must propagate into both inverses, not just the forward function.
     s_star = ev.min_admissible_stop(ev.COST_TOLERANCE_R, 0.5, slip, fees)
     assert ev.cost_in_r(s_star, 0.5, slip, fees) == pytest.approx(
         ev.COST_TOLERANCE_R, rel=1e-12)
     be = ev.max_tolerable_slip(0.03, 0.5, ev.COST_TOLERANCE_R, fees)
+    assert be is not None and be > 0.0
     assert ev.cost_in_r(0.03, 0.5, be, fees) == pytest.approx(
         ev.COST_TOLERANCE_R, rel=1e-12)
 
 
-def test_nonfill_term_exhausting_the_budget_raises(monkeypatch, fees):
-    """If the placeholder is ever set above the budget, the inverses have no
-    solution and must say so rather than returning a negative stop."""
-    monkeypatch.setattr(ev, "MAKER_NONFILL_COST_R", 0.5)
-    with pytest.raises(ValueError, match="consumes the entire"):
-        ev.min_admissible_stop(ev.COST_TOLERANCE_R, 1.0, 0.0, fees)
-    with pytest.raises(ValueError, match="consumes the entire"):
-        ev.max_tolerable_slip(0.02, 1.0, ev.COST_TOLERANCE_R, fees)
+def test_large_nonfill_term_makes_stops_inadmissible_through_the_normal_path(
+        monkeypatch, fees):
+    """REPLACES `test_nonfill_term_exhausting_the_budget_raises`.
+
+    Under R denomination the term was subtracted from the budget, so a large
+    value could consume it outright and the inverses had to raise. As a price
+    fraction it competes with the fees inside the numerator instead, and a
+    large value simply pushes s* out and turns cells inadmissible -- which is
+    the ordinary mechanism, not a special case. There is no budget-exhaustion
+    failure mode left to guard, and asserting one would be asserting the old
+    denomination.
+    """
+    monkeypatch.setattr(ev, "MAKER_NONFILL_SLIP", 0.01)
+    # 2*0.01 / 0.11 = 18.18% of entry: enormous, but a number, not an error.
+    assert ev.min_admissible_stop(ev.COST_TOLERANCE_R, 1.0, 0.0, fees) == (
+        pytest.approx(2.0 * (fees.maker_rate + 0.01) / ev.COST_TOLERANCE_R, rel=1e-12))
+    # And an ordinary stop is now inadmissible on fixed costs alone.
+    assert ev.max_tolerable_slip(0.02, 1.0, ev.COST_TOLERANCE_R, fees) is None
+    assert ev.max_tolerable_slip(0.02, 0.5, ev.COST_TOLERANCE_R, fees) is None
 
 
 # ---------------------------------------------------------------------------

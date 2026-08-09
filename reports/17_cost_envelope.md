@@ -137,9 +137,12 @@ of carry and it is outside this envelope — see section 8, item 3.
 **Corrected:**
 
     f_eff     = maker_frac * f_maker + (1 - maker_frac) * f_taker      [unchanged]
-    cost_in_R = [ 2*f_eff + 2*(1 - maker_frac)*slip ] / s
-                + 2 * maker_frac * MAKER_NONFILL_COST_R                [= 0, see below]
-    s*        = [ 2*f_eff + 2*(1 - maker_frac)*slip ] / tolerance_r
+    cost_in_R = [ 2*f_eff
+                + 2*(1 - maker_frac)*slip
+                + 2*maker_frac*MAKER_NONFILL_SLIP ] / s                [term = 0, see 3.4]
+    s*        = [ 2*f_eff
+                + 2*(1 - maker_frac)*slip
+                + 2*maker_frac*MAKER_NONFILL_SLIP ] / tolerance_r
 
 Both legs are charged a fee. **Only the taker legs pay slippage** — a leg filled
 as maker rested at its own price and got that price. Charging slippage on maker
@@ -208,8 +211,11 @@ shrinkage and the exact zero at all-maker.
 
 ### 3.4 The counterweight: maker legs are slippage-free but NOT costless
 
-`MAKER_NONFILL_COST_R = 0.0` in `src/costs/envelope.py`. **Unmodelled. A
-placeholder, not a measurement.**
+`MAKER_NONFILL_SLIP = 0.0` in `src/costs/envelope.py`. **Unmodelled. A
+placeholder, not a measurement.** A chase distance, denominated as a **fraction
+of price** — dimensionally identical to `slip`, and divided by `s` alongside it.
+The unit was ambiguous when this term was introduced and was resolved in a third
+pass; see section 8, item 12.
 
 A resting limit order fails to fill precisely when price is moving away from the
 rest. The leg is then chased at a worse price, or the trade is missed
@@ -226,18 +232,24 @@ maker" is reading a number the model does not have.
 It appears in the cost computation as an additive term rather than only in
 prose, so no cost figure can be produced without it being structurally present.
 A test raises the constant and requires every downstream figure to move by
-exactly `2 * maker_frac * MAKER_NONFILL_COST_R`, so it cannot decay into a
+exactly `2 * maker_frac * MAKER_NONFILL_SLIP / s`, so it cannot decay into a
 decorative constant nothing reads. **No value is estimated for it here.** It
 needs fill data this step may not read.
 
 *One deviation from the specification, stated rather than made silently:* the
 term was specified as a flat additive constant. It is implemented as
-`2 * maker_frac * MAKER_NONFILL_COST_R` — scaled by the number of maker legs —
+`2 * maker_frac * MAKER_NONFILL_SLIP` — scaled by the number of maker legs —
 because a flat term would charge a non-fill cost at `maker_frac = 0`, where
-there are no maker legs to fail to fill. It also does **not** divide by `s`: a
-missed fill is a missed opportunity, not a price-proportional charge. Both shape
-choices are unverified placements for a term of unknown magnitude, not findings.
-At the current value of zero, neither choice changes any published number.
+there are no maker legs to fail to fill. That scaling is an unverified shape for
+a term of unknown magnitude, not a finding. At the current value of zero it
+changes no published number.
+
+*Superseded in the third pass:* this paragraph originally also claimed the term
+does **not** divide by `s`, on the reasoning that "a missed fill is a missed
+opportunity, not a price-proportional charge". That was wrong, and it is
+corrected in section 8, item 12. A chase distance is exactly a price-proportional
+quantity — it is `slip` under another name — and it now divides by `s` with
+every other cost term.
 
 ### 3.5 The equity cancellation — unchanged and unaffected by the correction
 
@@ -571,7 +583,9 @@ the full suite re-run green after each.
 ## 8. ASSUMPTIONS AND AMBIGUITIES
 
 All ten from the first pass are carried forward, with items 2 and 4 rewritten to
-reflect what changed. Two new items follow.
+reflect what changed. Three new items follow. Item 12 was added in a third pass
+that resolved a unit ambiguity in the item-11 placeholder; it changes no
+published number.
 
 **1. `maker_frac` is a deterministic fraction of legs, not a fill probability.**
 The surface is over an assumed average execution mix. Real fills are stochastic:
@@ -643,18 +657,69 @@ understates the loss-side exit fee by about `(1 - s)` and overstates the win-sid
 one. At `s` ≤ 5% this is a sub-5% error on the fee component. Noted for
 completeness; it does not affect any verdict here.
 
-**11. NEW — the maker non-fill cost is a placeholder at zero.** `MAKER_NONFILL_COST_R
+**11. NEW — the maker non-fill cost is a placeholder at zero.** `MAKER_NONFILL_SLIP
 = 0.0`, unmodelled. Setting it to zero is a **known understatement of
 maker-execution cost**, and the consequence is concrete: the flat all-maker
 column in section 3.2 and the entire `UNCON` column in section 4.3 are
-**optimistic**. The model currently says all-maker execution has no
-slippage-like cost at all, which is mechanically true and economically false.
-Its shape in the expression (per maker leg, not scaled by `s`) is itself an
-unverified placement. **No value is estimated.** It needs fill data, and it
-should be measured in the same step as slippage — the two come from the same
-observations.
+**optimistic** and must not be designed around. The model currently says
+all-maker execution has no slippage-like cost at all, which is mechanically
+true and economically false. **No value is estimated.** It needs fill data, and
+it should be measured in the same step as slippage — the two come from the same
+observations, and item 13 establishes that they are the same *kind* of quantity.
 
-**12. NEW — the first pass's slippage verdict is retracted.** Section 4.1. The
+**12. NEW — the non-fill term's UNIT was ambiguous; resolved as a PRICE
+FRACTION.** The constant was introduced as `MAKER_NONFILL_COST_R`, whose `_R`
+suffix declares R denomination, and it was placed *outside* the division by `s`
+— consistently R-denominated, so the two agreed, and the second pass shipped
+without noticing that the agreement was on the wrong unit.
+
+**What the ambiguity was.** The quantity is a chase distance: a resting order
+did not fill, and the leg was taken at a worse price. That is a distance between
+the price you wanted and the price you got, which is dimensionally identical to
+`slip` and therefore a fraction of price — not a fraction of risk. Two
+placements are available and they differ by a factor of `1/s`, which is **20×
+at `s` = 5% and 200× at `s` = 0.5%**:
+
+    price fraction :  ( 2*f_eff + 2*(1-mf)*slip + 2*mf*C ) / s
+    R-denominated  :  ( 2*f_eff + 2*(1-mf)*slip ) / s  +  2*mf*C
+
+**Which was adopted, and why.** Price fraction. The constant is renamed
+`MAKER_NONFILL_SLIP` — the name now carries the unit, because the unit is the
+thing that was ambiguous — and it sits in the numerator beside `slip`, divided
+by `s` exactly once along with everything else. Chasing a leg twenty basis
+points is the same twenty basis points whether the stop behind it is 0.5% or
+5%. R denomination asserts the opposite: it would fix the chase at a constant
+*fraction of risk*, so a strategy could shrink the cost of its own missed fills
+merely by widening its stop. **That inverts the causality — the stop does not
+reach back and change what the order book did.** Under price-fraction
+denomination a wider stop does still reduce the chase's cost in R, but as a
+consequence of dividing a fixed price distance by a larger `s`, which is exactly
+how the fees and `slip` already behave.
+
+**No published number in this report changes.** The constant is zero, and the
+two placements are numerically identical at zero — which is precisely why the
+error was invisible and why the resolution is enforced structurally rather than
+documented. Every figure in sections 3.2, 4.3, 5 and 6 was recomputed after the
+change and is byte-identical. The correction matters entirely for what happens
+when the term is given a value.
+
+**How it is now enforced.** A unit-consistency test raises the constant to a
+non-zero probe and pins the result at **two** values of `s`, asserting that the
+gap between the two candidate placements scales as `(1/s − 1)`. No single
+R-denominated constant can reproduce the price-fraction answer at both, so the
+test fails on the *placement* rather than on the value. A third planted mutation
+moves the term back outside the division and is confirmed to fail it. The old
+identifier is barred from the module by an AST check, so a name asserting the
+wrong unit cannot return. Also removed: `_net_tolerance`, which subtracted the
+term from the budget before solving the inverses. That subtraction was the R
+treatment's bookkeeping — a cost that did not scale with `s` had to come off the
+top — and with it goes the "consumes the entire budget" failure mode it needed.
+
+**What remains unverified** is the *shape*, not the unit: that the cost is
+linear in the number of maker legs (`2 * maker_frac`) is the least-wrong
+placement for a term of unknown magnitude, not a finding.
+
+**13. NEW — the first pass's slippage verdict is retracted.** Section 4.1. The
 2.5× ratio and the "slippage is load-bearing" conclusion were artifacts of an
 axis width that had been written down rather than measured. Anything downstream
 that cited report 17 for "slippage is load-bearing" is citing a retracted claim
