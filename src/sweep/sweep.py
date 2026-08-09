@@ -472,6 +472,11 @@ def run_sweep(symbols=SYMBOLS, folds=None, grid_json=None,
     os.makedirs(TRADES_DIR, exist_ok=True)
 
     state = load_checkpoint() if resume else {"done": []}
+    # The hash the SIMULATION ran at, pinned here rather than re-derived when
+    # the report is generated: reporting happens later, from a tree that has
+    # moved on, and the figures belong to the commit that produced them.
+    # __main__ refuses to start on a dirty tree, so this is always clean.
+    state.setdefault("sweep_git_commit", sch.git_revision())
     done = set(tuple(x) for x in state["done"])
     if not resume and os.path.exists(CELLS_PATH):
         os.remove(CELLS_PATH)

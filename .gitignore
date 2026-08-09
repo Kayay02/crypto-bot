@@ -35,6 +35,13 @@ __pycache__/
 !/data/derived/sweep/
 /data/derived/sweep/*
 !/data/derived/sweep/grid.json
+# sweep.json is the step 2 deliverable: the per-offset, per-arm, per-population
+# aggregates that steps 3 through 8 select from. Steps 3 and 4 are forbidden
+# from revisiting step 2, so a committed copy proves which numbers the band
+# identification and collapse were performed against. ~200 KB. The per-cell
+# JSONL (~7k records) and the trade tables stay ignored -- both are
+# reproducible from this hash and are far too large to track.
+!/data/derived/sweep/sweep.json
 # e6_dispersion.json records the measured sigma, the per-fold trade counts and
 # the E6 trigger verdict, against the clean hash the lift was taken at. The
 # trigger is pre-committed and cannot be re-decided once sigma is known, so a
