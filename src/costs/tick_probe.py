@@ -369,6 +369,68 @@ def tick_table(artifact, tick_counts=TICK_COUNTS):
 
 
 # ---------------------------------------------------------------------------
+# QUANTITY GRANULARITY. Added to close report 17 section 6, which deferred the
+# dollar-denominated check to "a later step permitted to read prices" -- and
+# which, ranking on the wrong quantity, named the wrong symbol.
+# ---------------------------------------------------------------------------
+
+def step_value_usdt(qty_step, price):
+    """What ONE quantity step is worth: qty_step * price.
+
+    THIS IS THE QUANTITY THE RANKING MUST BE MADE ON, and getting it wrong is
+    the error report 18 section 8 corrects. `qty_step` alone is not comparable
+    across symbols -- 0.1 SOL and 0.0001 BTC are not the same kind of thing --
+    and neither is the price at which a step reaches some fraction of notional,
+    because that threshold says where the line is, not which side of it the
+    instrument is standing on. Only step_value_usdt is a dollar amount, and
+    only dollar amounts can be ranked. A test plants the qty_step-alone
+    comparison, which is the original mistake.
+    """
+    for label, v in (("qty_step", qty_step), ("price", price)):
+        if not math.isfinite(float(v)) or float(v) <= 0.0:
+            raise ValueError("%s must be finite and positive, got %r" % (label, v))
+    return float(qty_step) * float(price)
+
+
+def step_fraction_of_notional(qty_step, price, s, risk_dollars):
+    """One quantity step as a fraction of position notional.
+
+        notional      = risk_dollars / s
+        step_fraction = qty_step * price / notional
+                      = qty_step * price * s / risk_dollars
+
+    LINEAR IN `s`, because notional is inverse in it: a wider stop is a smaller
+    position, and the same step is a larger slice of it. Granularity is
+    therefore worst exactly where the cost envelope is most comfortable.
+
+    `risk_dollars` is REQUIRED, not defaulted. It is `RISK_DOLLARS` in
+    `src/costs/envelope.py`; a test pins the two together. Defaulting it here
+    would put a second copy of the project's risk size in a second module,
+    which is how the two drift apart.
+    """
+    if not math.isfinite(s) or s <= 0.0:
+        raise ValueError("stop fraction s must be positive and finite, got %r" % (s,))
+    if not math.isfinite(risk_dollars) or risk_dollars <= 0.0:
+        raise ValueError(
+            "risk_dollars must be positive and finite, got %r" % (risk_dollars,)
+        )
+    return step_value_usdt(qty_step, price) * s / risk_dollars
+
+
+def granularity_ranking(artifact):
+    """Symbols ordered by step_value_usdt, coarsest first.
+
+    Returns [(symbol, step_value_usdt), ...]. The ordering is the whole point
+    of the function, so it is returned rather than a dict.
+    """
+    vals = [
+        (sym, step_value_usdt(float(spec["qty_step"]), float(spec["price"])))
+        for sym, spec in artifact["instruments"].items()
+    ]
+    return sorted(vals, key=lambda kv: -kv[1])
+
+
+# ---------------------------------------------------------------------------
 # Retrieval entry point.
 # ---------------------------------------------------------------------------
 

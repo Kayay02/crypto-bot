@@ -334,3 +334,143 @@ def test_taker_pays_half_the_spread_not_all_of_it():
     # the round trip would silently paper over it.
     assert tp.ticks_for_slip(0.005, 0.1, 100000.0) == pytest.approx(1.0, rel=1e-12)
     assert tp.ticks_for_slip(0.010, 0.1, 100000.0) == pytest.approx(2.0, rel=1e-12)
+
+
+# ---------------------------------------------------------------------------
+# QUANTITY GRANULARITY -- the report 17 section 6 correction.
+# ---------------------------------------------------------------------------
+
+def test_step_fraction_exact_synthetic_case():
+    """Hand-computable: step 0.01 at price 2,000 is worth $20.
+
+    At a 2% stop the position is $20 / 0.02 = $1,000 notional, so one step is
+    $20 / $1,000 = exactly 2% of it.
+    """
+    assert tp.step_value_usdt(0.01, 2000.0) == pytest.approx(20.0, rel=1e-15)
+    assert tp.step_fraction_of_notional(0.01, 2000.0, 0.02, 20.0) == pytest.approx(
+        0.02, rel=1e-15)
+    # And a second one with different arithmetic: step worth $5, notional $400.
+    assert tp.step_value_usdt(0.1, 50.0) == pytest.approx(5.0, rel=1e-15)
+    assert tp.step_fraction_of_notional(0.1, 50.0, 0.05, 20.0) == pytest.approx(
+        5.0 / 400.0, rel=1e-15)
+
+
+def test_step_fraction_is_linear_in_s():
+    """notional is inverse in s, so the step's share of it is linear in s."""
+    base = tp.step_fraction_of_notional(0.01, 2000.0, 0.01, 20.0)
+    for k in (1.5, 2.0, 3.0, 5.0):
+        assert tp.step_fraction_of_notional(0.01, 2000.0, 0.01 * k, 20.0) == (
+            pytest.approx(k * base, rel=1e-12))
+    # Additivity, which linearity implies and a quadratic term would break.
+    assert tp.step_fraction_of_notional(0.01, 2000.0, 0.03, 20.0) == pytest.approx(
+        tp.step_fraction_of_notional(0.01, 2000.0, 0.01, 20.0)
+        + tp.step_fraction_of_notional(0.01, 2000.0, 0.02, 20.0), rel=1e-12)
+
+
+def test_step_fraction_scales_correctly_in_its_other_arguments():
+    base = tp.step_fraction_of_notional(0.01, 2000.0, 0.02, 20.0)
+    assert tp.step_fraction_of_notional(0.02, 2000.0, 0.02, 20.0) == pytest.approx(
+        2.0 * base, rel=1e-12)
+    assert tp.step_fraction_of_notional(0.01, 4000.0, 0.02, 20.0) == pytest.approx(
+        2.0 * base, rel=1e-12)
+    assert tp.step_fraction_of_notional(0.01, 2000.0, 0.02, 40.0) == pytest.approx(
+        0.5 * base, rel=1e-12)
+
+
+def test_risk_dollars_is_not_duplicated_in_this_module():
+    """`risk_dollars` is required, so the project's risk size lives in one place."""
+    import inspect
+    sig = inspect.signature(tp.step_fraction_of_notional)
+    assert sig.parameters["risk_dollars"].default is inspect.Parameter.empty
+    assert ev.RISK_DOLLARS == 20.0
+
+
+def test_step_fraction_rejects_bad_inputs():
+    for bad in (0.0, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            tp.step_value_usdt(bad, 100.0)
+        with pytest.raises(ValueError):
+            tp.step_value_usdt(0.1, bad)
+        with pytest.raises(ValueError):
+            tp.step_fraction_of_notional(0.1, 100.0, bad, 20.0)
+        with pytest.raises(ValueError):
+            tp.step_fraction_of_notional(0.1, 100.0, 0.02, bad)
+
+
+def test_eth_is_the_coarsest_symbol_at_the_committed_prices(artifact):
+    """ORDERING ASSERTION: ETH > SOL > BTC on step_value_usdt.
+
+    This is the finding that reverses report 17 section 6, which named SOL. It
+    is asserted as a strict ordering of all three, so any reordering fails --
+    not just a swap of the top two.
+    """
+    rank = tp.granularity_ranking(artifact)
+    assert [s for s, _ in rank] == ["ETHUSDT", "SOLUSDT", "BTCUSDT"], rank
+
+    vals = dict(rank)
+    assert vals["ETHUSDT"] > vals["SOLUSDT"] > vals["BTCUSDT"]
+    # The magnitudes, recomputed here from the artifact rather than copied.
+    inst = artifact["instruments"]
+    for sym in tp.SYMBOLS:
+        expected = float(inst[sym]["qty_step"]) * float(inst[sym]["price"])
+        assert vals[sym] == pytest.approx(expected, rel=1e-12)
+    # ETH's step is worth appreciably more than SOL's -- not a near-tie that
+    # could flip on a rounding difference.
+    assert vals["ETHUSDT"] / vals["SOLUSDT"] > 2.0
+
+    # The ordering must hold at every stop width, since step_fraction is the
+    # same ranking scaled by a common positive factor.
+    for s in (0.01, 0.015, 0.02, 0.03, 0.05):
+        fr = {sym: tp.step_fraction_of_notional(
+            float(inst[sym]["qty_step"]), float(inst[sym]["price"]), s,
+            ev.RISK_DOLLARS) for sym in tp.SYMBOLS}
+        assert fr["ETHUSDT"] > fr["SOLUSDT"] > fr["BTCUSDT"], (s, fr)
+
+
+def test_ranking_on_qty_step_alone_would_give_the_wrong_answer(artifact):
+    """PLANTED MUTATION GUARD: rank on `qty_step` instead of qty_step * price.
+
+    THE MUTATION. In `step_value_usdt`, change
+
+        return float(qty_step) * float(price)   ->   return float(qty_step)
+
+    which makes `granularity_ranking` order by the raw step. That is exactly
+    the error report 17 section 6 made, so it is the mutation this guard must
+    catch.
+
+    WHY IT LOOKS RIGHT. Ranked on the bare step, SOL (0.1) is ten times ETH
+    (0.01) and a thousand times BTC (0.0001), and the conclusion "SOL is
+    unambiguously the coarsest, by a wide margin" writes itself. It is wrong
+    because 0.1 SOL and 0.0001 BTC are not the same kind of quantity; only
+    their dollar values are comparable, and in dollars the order is ETH, SOL,
+    BTC.
+
+    THE ARITHMETIC, at the committed prices:
+
+        bare step      SOL 0.1     > ETH 0.01    > BTC 0.0001
+        step in USDT   ETH $19.22  > SOL $7.71   > BTC $6.52
+
+    Note the mutation REVERSES the top two and leaves BTC last, so a check
+    that only looked at which symbol came last would pass. Confirmed to fail
+    under the mutation before being committed.
+    """
+    inst = artifact["instruments"]
+    bare = {sym: float(inst[sym]["qty_step"]) for sym in tp.SYMBOLS}
+    assert bare["SOLUSDT"] > bare["ETHUSDT"] > bare["BTCUSDT"], (
+        "the bare-step ordering is the premise of this test")
+
+    # The correct ranking must NOT agree with the bare-step ranking.
+    ranked = [s for s, _ in tp.granularity_ranking(artifact)]
+    bare_ranked = sorted(tp.SYMBOLS, key=lambda s: -bare[s])
+    assert ranked != bare_ranked, (
+        "granularity_ranking is ordering on qty_step alone; it must order on "
+        "qty_step * price. ranked=%r bare=%r" % (ranked, bare_ranked))
+    assert ranked[0] == "ETHUSDT"
+    assert bare_ranked[0] == "SOLUSDT"
+
+    # And the value itself must carry the price, not just the step.
+    assert tp.step_value_usdt(0.01, 2000.0) == pytest.approx(20.0, rel=1e-12)
+    assert tp.step_value_usdt(0.01, 2000.0) != pytest.approx(0.01, rel=1e-6)
+    # Doubling price must double the step value; under the mutation it would not.
+    assert tp.step_value_usdt(0.01, 4000.0) == pytest.approx(
+        2.0 * tp.step_value_usdt(0.01, 2000.0), rel=1e-12)

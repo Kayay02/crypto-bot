@@ -394,3 +394,172 @@ materially before this is relied on.
   model.** This step did not touch it. It is now the only unquantified term left
   in the envelope, and it is the one that determines whether maker execution is
   worth pursuing at all.
+
+---
+
+## 8. QUANTITY GRANULARITY — CLOSING REPORT 17 SECTION 6
+
+Report 17 section 6 deferred the dollar-denominated granularity check to "a
+later step permitted to read prices" and named **SOLUSDT** as the binding
+symbol. This step has those prices. **Closing the check reverses the symbol.**
+
+**No new retrieval was performed.** The quantity steps and prices used here are
+the values committed in `data/reference/bitget_instruments.json` at commit
+`d850ac4`, retrieved at **`2026-08-09T17:48:59+00:00`**. The working copy is
+byte-identical to that commit.
+
+### 8.1 The granularity table
+
+    step_value_usdt   = qty_step * price
+    notional(s)       = 20.0 / s
+    step_fraction(s)  = step_value_usdt / notional(s)
+                      = qty_step * price * s / 20.0
+
+**What one quantity step is worth:**
+
+| symbol | qty step **(base coin)** | price **(USDT)** | step value **(USDT)** | vs BTC **(×)** |
+|---|---:|---:|---:|---:|
+| **ETHUSDT** | 0.01 | 1,922.38 | **$19.2238** | 2.95× |
+| SOLUSDT | 0.1 | 77.126 | $7.7126 | 1.18× |
+| BTCUSDT | 0.0001 | 65,172.60 | $6.5173 | 1.00× |
+
+**One step as a fraction of position notional.** All cells are **percent of
+notional**; `notional` is $2,000 at a 1% stop falling to $400 at a 5% stop.
+
+| symbol | s=1.00% **(% of notional)** | s=1.50% **(%)** | s=2.00% **(%)** | s=3.00% **(%)** | s=5.00% **(%)** |
+|---|---:|---:|---:|---:|---:|
+| **ETHUSDT** | **0.9612** | **1.4418** | **1.9224** | **2.8836** | **4.8060** |
+| SOLUSDT | 0.3856 | 0.5784 | 0.7713 | 1.1569 | 1.9282 |
+| BTCUSDT | 0.3259 | 0.4888 | 0.6517 | 0.9776 | 1.6293 |
+
+**The same figures in dollars of the $20 risk** — `20.0 × step_fraction`, the
+most a single step of rounding can move realised risk:
+
+| symbol | s=1.00% **(USDT of risk)** | s=1.50% **(USDT)** | s=2.00% **(USDT)** | s=3.00% **(USDT)** | s=5.00% **(USDT)** |
+|---|---:|---:|---:|---:|---:|
+| **ETHUSDT** | **$0.1922** | **$0.2884** | **$0.3845** | **$0.5767** | **$0.9612** |
+| SOLUSDT | $0.0771 | $0.1157 | $0.1543 | $0.2314 | $0.3856 |
+| BTCUSDT | $0.0652 | $0.0978 | $0.1303 | $0.1955 | $0.3259 |
+
+**ETHUSDT is the largest at every stop width**, by **2.49× over SOLUSDT** and
+**2.95× over BTCUSDT**. Those multiples are constant across `s`, because
+`step_fraction` is the same ranking scaled by a common positive factor — the
+ordering cannot cross over anywhere on the axis.
+
+**Worst case: `20.0 × max(step_fraction)` = $0.9612 of the $20 risk — 4.81% —
+on ETHUSDT at a 5.00% stop.** At a 1.00% stop the worst case is $0.1922, or
+0.96%.
+
+### 8.2 This reverses report 17 section 6, and why it got it wrong
+
+Report 17 section 6.3 stated: *"SOL is unambiguously the binding case, by a wide
+margin: its thresholds sit 10× below ETH's and 1,000× below BTC's."* **That is
+wrong, and the reason is worth naming precisely.**
+
+**The ranking was made on where each threshold sits, not on where each
+instrument sits relative to its own threshold.** Report 17 computed, correctly,
+the price at which one step reaches 1% of a $400 position: $40 for SOL, $400 for
+ETH, $40,000 for BTC. It then ranked the symbols by those thresholds — SOL's is
+lowest, so SOL "must" be most exposed. But a threshold says where the line is,
+not which side of it the instrument is standing on, or how far past it:
+
+| symbol | 1%-of-$400-notional threshold **(USDT)** | actual price **(USDT)** | trades past its threshold by **(×)** |
+|---|---:|---:|---:|
+| **ETHUSDT** | 400 | 1,922.38 | **4.81×** |
+| SOLUSDT | 40 | 77.126 | 1.93× |
+| BTCUSDT | 40,000 | 65,172.60 | 1.63× |
+
+SOL's threshold is ten times lower than ETH's *and* SOL's price is twenty-five
+times lower than ETH's. The second fact dominates, and report 17 used only the
+first. The only quantity that is comparable across symbols is a **dollar
+amount** — `qty_step × price` — because 0.1 SOL and 0.0001 BTC are not the same
+kind of thing and cannot be ranked against each other directly. Report 17 said
+as much about *tick* size and then did not apply the same discipline to *quantity*
+step.
+
+Report 17 section 6.3 is marked SUPERSEDED in place, with the original argument
+left intact.
+
+A test asserts the strict ordering ETH > SOL > BTC on `step_value_usdt`, and a
+planted mutation reproduces the original error by ranking on `qty_step` alone.
+
+### 8.3 The rounding-direction check — AND WHAT IT FOUND
+
+Report 17 section 6.3 item 3 also asserted: *"Quantisation makes realised risk
+lower than intended (quantity rounds down), so it degrades statistical power
+rather than breaching the risk budget. It is a precision problem, not a safety
+one."*
+
+**That assertion was checked against the engine. It does not describe this
+codebase, because THE ENGINE PERFORMS NO QUANTITY QUANTISATION AT ALL.**
+
+**1. The exact operation.** Position quantity is computed in
+`src/engine/costs.py:339`, the final line of `position_size`:
+
+```python
+    return cfg.risk_usd / denom
+```
+
+A raw float. It is consumed directly at `src/engine/simulate.py:190`
+(`qty = position_size(entry, stop, direction, cfg, symbol)`) and used unmodified
+for notional, target solving, P&L and MFE/MAE. **There is no rounding step
+between the two.** A repository-wide search for any quantisation of `qty` —
+`round`, `math.floor`, `math.ceil`, `int()`, or the engine's own
+`round_to_tick` — returns nothing. `round_to_tick` exists and is applied to
+**prices** only.
+
+**2. Floors, rounds, or ceils?** **None of the three.** Orders are sized at full
+float precision, on a quantity grid the exchange would not accept.
+
+Note that `OrderSpec` in `src/engine/contracts.py:79-83` *does* parse and store
+`qty_step`. It is written to JSON and printed in `__repr__`, and it is read by
+no sizing or execution code anywhere. The field is carried, not used.
+
+**3. Can a minimum-quantity clamp raise quantity above the fixed-risk target?**
+**No.** `check_min_qty` (`src/engine/costs.py:349-365`) returns
+`(False, reason)` and the caller *refuses the trade* at
+`src/engine/simulate.py:196-199` rather than resizing it. The codebase states
+this itself at `src/engine/simulate.py:702-704`: *"taken trades are always
+risk_rule because leverage_cap and min_qty REFUSE rather than resize."* No
+clamp path can inflate quantity.
+
+**So the risk budget is not currently breached** — but not for the reason report
+17 gave. It is not breached because the rounding that report 17 described as
+safe does not happen. Report 17's claim is not true-or-false about this engine;
+it is a statement about an unimplemented feature, and it should not be relied on
+as a guarantee.
+
+**THE LIVE CONSEQUENCE, FLAGGED FOR POINT 5 (RISK AND POSITION SIZING).** Any
+order actually sent to Bitget must be a multiple of `qty_step`. When
+quantisation is implemented, the direction is a design decision with a risk-rule
+consequence attached, and the figures in section 8.1 are its magnitude:
+
+- **Floor (round down).** Realised risk is at most `20.0 × step_fraction`
+  *below* $20 — the section 8.1 dollar table read as a shortfall. Worst case
+  $0.96 on ETH at a 5% stop. Never breaches the budget. This is what report 17
+  assumed was already happening.
+- **Round to nearest.** Realised risk can *exceed* $20 by up to **half** a step:
+  $0.0961 on ETH at a 1% stop, rising to **$0.4806 at a 5% stop** (2.40% over
+  budget). SOL and BTC top out at $0.1928 and $0.1629.
+- **Ceil (round up).** Realised risk can exceed $20 by up to a **full** step:
+  **$0.1922 to $0.9612 on ETH** across the 1%–5% range, i.e. **up to 4.81% over
+  the $20 target**. SOL up to $0.3856, BTC up to $0.3259.
+
+**Round-to-nearest and ceil both breach the project's standing rule that risk
+per trade never exceeds 1% of equity after costs.** $20 *is* 1% of $2,000, so
+any excess at all is a breach — it is available at every stop width and on every
+symbol under either option, and only the magnitude varies. At the worst cell
+(ETH, 5.00% stop, ceil) realised risk reaches **$20.96, or 1.048% of equity**.
+Only **floor** is incapable of breaching.
+
+**This is NOT fixed in this step.** Changing sizing behaviour is a design
+decision, not a cleanup, and it belongs to Point 5. What this step establishes is
+that the decision exists, that it has not been made, that a default of
+round-to-nearest — the most natural thing to reach for — would breach the risk
+rule, and by exactly how much.
+
+### 8.4 What remains open
+
+**One item: the engine has no quantity quantisation, so the rounding direction
+is an unmade Point 5 design decision — and floor is the only one of the three
+options that cannot breach the $20 risk rule.**

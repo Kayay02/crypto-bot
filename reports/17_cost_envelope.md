@@ -472,6 +472,30 @@ at which one step reaches the stated fraction of the position.
 
 ### 6.3 Is quantisation material for SOL specifically?
 
+> **SUPERSEDED — THE SYMBOL NAMED HERE IS WRONG. See report 18, section 8.**
+>
+> Report 18 read prices and closed this check. **ETHUSDT is the coarsest
+> symbol, not SOLUSDT.** One quantity step is worth **$19.22 on ETH against
+> $7.71 on SOL and $6.52 on BTC** — ETH's step is 2.5× SOL's, at every stop
+> width.
+>
+> **The error was in what was ranked.** The argument below ranks the symbols by
+> *where each threshold sits* — SOL's 1%-of-notional threshold is at a $40
+> price, ETH's at $400, so SOL "looks" ten times more exposed. That compares
+> the positions of the lines, not the positions of the instruments relative to
+> their own lines. SOL trades 1.9× past its threshold; ETH trades 4.8× past
+> its. The quantity that is actually comparable across symbols is
+> `qty_step × price`, a dollar amount, and on that measure the order reverses.
+>
+> The subsidiary claim in item 3 below — that quantity "rounds down" — is also
+> not a fact about this codebase. **The engine performs no quantity
+> quantisation at all.** See report 18 section 8.2.
+>
+> The original argument is kept in full rather than deleted. A wrong argument
+> recorded as wrong is worth more than one quietly removed, and this particular
+> mistake — ranking on a threshold rather than on the distance to it — is a
+> shape worth being able to recognise again.
+
 **SOL is unambiguously the binding case, by a wide margin: its thresholds sit
 10× below ETH's and 1,000× below BTC's.** Bitget quotes SOL quantity to one
 decimal place, so a SOL position is expressible only in tenths of a coin, while
@@ -505,6 +529,12 @@ Three things that *can* be stated without a price:
 **Verdict: retrievable, retrieved, and decidable with one number this step may
 not read. SOL is the symbol to check first, and the substitution belongs in the
 next step alongside the slippage measurement — both need the same data access.**
+
+> **SUPERSEDED.** The substitution was made in report 18 section 8. The
+> deferral was correct; the symbol named was not. **ETHUSDT is the binding
+> case at every stop width**, and the worst granularity error anywhere in the
+> admissible region is **$0.96 of the $20 risk (4.81%), on ETH at a 5.00%
+> stop.**
 
 ---
 
