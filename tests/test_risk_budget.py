@@ -909,3 +909,260 @@ def test_the_module_still_carries_exactly_one_function():
     assert functions == ["_refuse_inexact_transcription"], (
         "constants only: no rotation function, no allocation function. "
         "Implementing them is 5.3's work.")
+
+
+# ===========================================================================
+# AMENDMENT 2 -- exits before entries within a bar close.
+#
+# docs/design/05b_aggregate_risk_budget_amendment_2.md
+# ===========================================================================
+
+AMENDMENT_2_PATH = os.path.join(
+    ROOT, "docs", "design", "05b_aggregate_risk_budget_amendment_2.md")
+
+FROZEN_AMENDMENT_1_SHA256 = (
+    "50da5aed3fabb86c3c7b54b41642444e50c7a7790de8dc93ab401ab53071522c")
+"""docs/design/05a_aggregate_risk_budget_amendment_1.md as frozen at 62c2d2b."""
+
+
+@pytest.fixture(scope="module")
+def amendment_2():
+    assert os.path.exists(AMENDMENT_2_PATH), AMENDMENT_2_PATH
+    with open(AMENDMENT_2_PATH) as fh:
+        return fh.read()
+
+
+# ---------------------------------------------------------------------------
+# B1. BOTH FROZEN DOCUMENTS ARE UNMODIFIED.
+# ---------------------------------------------------------------------------
+
+def test_amendment_1_is_byte_for_byte_unchanged():
+    """Frozen at 62c2d2b. A correction is Amendment 3, not an edit."""
+    with open(AMENDMENT_PATH, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    assert digest == FROZEN_AMENDMENT_1_SHA256, (
+        "docs/design/05a_aggregate_risk_budget_amendment_1.md has CHANGED. It "
+        "is frozen at 62c2d2b and may not be edited.")
+
+
+def test_both_frozen_documents_are_named_with_their_hashes(amendment_2):
+    """The amendment must state what it is amending, and prove it is untouched."""
+    assert FROZEN_DOC_SHA256 in amendment_2
+    assert FROZEN_AMENDMENT_1_SHA256 in amendment_2
+    assert "a323237" in amendment_2 and "62c2d2b" in amendment_2
+
+
+def test_amendment_2_changes_no_level_and_no_earlier_constant():
+    """THE LEVEL DID NOT CHANGE, and neither did Amendment 1's constants."""
+    assert budget.MAX_AGGREGATE_OPEN_RISK_USD == 120.00
+    assert budget.RISK_PER_TRADE_USD == 20.00
+    assert budget.ACCOUNT_CAPITAL_USD == 2000.00
+    assert budget.BUDGET_FRACTION_OF_CAPITAL == 0.06
+    assert budget.FULL_SIZE_POSITIONS == 6
+    assert budget.MARGIN_MODE == "cross"
+    assert budget.POSITION_MODE == "hedge"
+    assert budget.TIE_BREAK_RULE == "cyclic_rotation_by_bar_timestamp"
+    assert budget.BUDGET_CHARGES == "nominal"
+    assert budget.SYMBOL_ROTATION == (
+        ("BTCUSDT", "ETHUSDT", "SOLUSDT"),
+        ("ETHUSDT", "SOLUSDT", "BTCUSDT"),
+        ("SOLUSDT", "BTCUSDT", "ETHUSDT"))
+
+
+# ---------------------------------------------------------------------------
+# B2. The new constant, and the document that states it.
+# ---------------------------------------------------------------------------
+
+def test_the_intra_bar_order_constant():
+    assert budget.INTRA_BAR_ORDER == "exits_before_entries"
+    assert budget.INTRA_BAR_ORDER != "entries_before_exits"
+
+
+def test_the_amendment_2_document_states_the_same_constant(amendment_2):
+    blocks = re.findall(r"```\n(.*?)```", amendment_2, re.DOTALL)
+    hits = [b for b in blocks if "INTRA_BAR_ORDER" in b]
+    assert len(hits) == 1, (
+        "the amendment must carry exactly ONE constants block; found %d"
+        % len(hits))
+    stated = dict(CANONICAL_RE.findall(hits[0]))
+    assert stated["INTRA_BAR_ORDER"].strip('"') == budget.INTRA_BAR_ORDER
+
+    # And in prose, so the value appears twice and must agree twice.
+    assert "EXITS ARE PROCESSED BEFORE ENTRIES" in amendment_2.upper()
+    assert "MAX_AGGREGATE_OPEN_RISK_USD` REMAINS `120.00`" in amendment_2
+
+
+def test_the_amendment_2_document_carries_its_required_sections(amendment_2):
+    headings = re.findall(r"^## (\d+)\.\s+(.+)$", amendment_2, re.MULTILINE)
+    assert [int(n) for n, _ in headings] == list(range(1, 8))
+    titles = {int(n): t.upper() for n, t in headings}
+    assert "WHAT CHANGED" in titles[1]
+    assert "RULE C" in titles[2]
+    assert "UNMODIFIED" in titles[3]
+    assert "ORDERING SURFACE" in titles[4]
+    assert "PRE-REGISTRATION" in titles[5]
+    assert "MAY NOT BE EDITED" in titles[6]
+    assert "CONSTANT" in titles[7]
+
+    parts = re.split(r"^## \d+\.\s+", amendment_2, flags=re.MULTILINE)[1:]
+    required = {
+        1: ("THE LEVEL DID NOT CHANGE", "a323237", "62c2d2b"),
+        2: ("not double", "more restrictive", "rule a", "half-open"),
+        3: ("supersedes nothing", FROZEN_DOC_SHA256),
+        4: ("third specification gap", "two-sided", "10 positions",
+            "wrong granularity"),
+        5: ("git log", "not consulted", "less restrictive"),
+        6: ("Amendment 3", "contamination event"),
+    }
+    for number, tokens in required.items():
+        for token in tokens:
+            assert token.lower() in parts[number - 1].lower(), (number, token)
+
+
+def test_the_document_enumerates_all_four_ordering_cases(amendment_2):
+    """§4 walks the surface deliberately rather than reactively."""
+    section = re.split(r"^## \d+\.\s+", amendment_2, flags=re.MULTILINE)[4]
+    for heading in ("4.1", "4.2", "4.3", "4.4", "4.5"):
+        assert heading in section, heading
+    assert "no contention" in section.lower()          # exits among themselves
+    assert "netted" in section.lower()                 # same-symbol same-bar
+    assert "impossible by construction" in section.lower()   # two on one symbol
+    assert "boundary" in section.lower()               # window-edge truncation
+
+
+# ---------------------------------------------------------------------------
+# B3. THE BEHAVIOURAL PIN -- the two orderings must be distinguishable.
+# ---------------------------------------------------------------------------
+
+def _process_bar(open_allocations, exits_at_this_bar, n_signals, order):
+    """One bar close, under either ordering. Returns (taken, remaining).
+
+    A deliberately minimal model of the two candidate loop orders, written HERE
+    and not in the module: `src/risk/budget.py` is constants only and
+    implementing the rule is 5.3's work. This exists to make the two orderings
+    distinguishable by test rather than only by prose.
+    """
+    unit = budget.RISK_PER_TRADE_USD
+    cap = budget.MAX_AGGREGATE_OPEN_RISK_USD
+    charged = open_allocations * unit
+
+    def evaluate(charged_now):
+        taken = 0
+        for _ in range(n_signals):
+            if cap - charged_now >= unit:
+                charged_now += unit
+                taken += 1
+        return taken, charged_now
+
+    if order == "exits_before_entries":
+        charged -= exits_at_this_bar * unit
+        taken, charged = evaluate(charged)
+    elif order == "entries_before_exits":
+        taken, charged = evaluate(charged)
+        charged -= exits_at_this_bar * unit
+    else:
+        raise ValueError(order)
+    return taken, cap - charged
+
+
+def test_at_the_cap_an_exit_and_a_signal_on_one_bar_TAKES_the_signal():
+    """THE PIN. Book full, one exit at the close of bar X, one signal on bar X.
+
+    Under Rule C the exit releases first and the signal is TAKEN. Under the
+    rejected ordering the same input skips it. If a future implementation
+    reverts to entries-first, this test fails.
+    """
+    taken, remaining = _process_bar(
+        open_allocations=budget.FULL_SIZE_POSITIONS,   # at the cap
+        exits_at_this_bar=1,
+        n_signals=1,
+        order=budget.INTRA_BAR_ORDER)
+    assert taken == 1, "the signal must be TAKEN"
+    assert remaining == 0.0
+
+    taken_wrong, _ = _process_bar(
+        open_allocations=budget.FULL_SIZE_POSITIONS,
+        exits_at_this_bar=1,
+        n_signals=1,
+        order="entries_before_exits")
+    assert taken_wrong == 0, "the rejected ordering must SKIP it"
+    assert taken != taken_wrong, (
+        "the two orderings must be distinguishable by test, not only by prose")
+
+
+def test_the_same_unit_funds_a_close_and_an_open_without_overlapping():
+    """NOT DOUBLE COUNTING: the two positions share no open bar.
+
+    Report 24 §5.3: a position closing at the close of bar X has X as its last
+    open bar; one opening at the close of X has X+1 as its first. Modelled here
+    as occupancy sets, and required disjoint.
+    """
+    x = 100
+    closing_open_bars = set(range(x - 20, x + 1))     # ... T+1 .. X inclusive
+    opening_open_bars = set(range(x + 1, x + 21))     # X+1 ..
+    assert closing_open_bars & opening_open_bars == set()
+    assert max(closing_open_bars) == x
+    assert min(opening_open_bars) == x + 1
+
+    # And on every bar the charged total stays within the cap.
+    for bar in sorted(closing_open_bars | opening_open_bars):
+        concurrent = ((bar in closing_open_bars) + (bar in opening_open_bars)
+                      + budget.FULL_SIZE_POSITIONS - 1)
+        assert concurrent * budget.RISK_PER_TRADE_USD <= \
+            budget.MAX_AGGREGATE_OPEN_RISK_USD, bar
+
+
+def test_exits_first_is_never_more_restrictive_than_entries_first():
+    """§2.3: the two orderings are ORDERED, not merely different.
+
+    Exhaustive over every reachable book state, exit count and signal count.
+    """
+    for open_allocations in range(budget.FULL_SIZE_POSITIONS + 1):
+        for exits in range(open_allocations + 1):
+            for signals in range(4):
+                first, _ = _process_bar(open_allocations, exits, signals,
+                                        "exits_before_entries")
+                second, _ = _process_bar(open_allocations, exits, signals,
+                                         "entries_before_exits")
+                assert first >= second, (open_allocations, exits, signals)
+
+
+def test_rule_C_never_breaches_the_cap():
+    """The thing the budget actually constrains, over the same exhaustive grid."""
+    unit = budget.RISK_PER_TRADE_USD
+    cap = budget.MAX_AGGREGATE_OPEN_RISK_USD
+    for open_allocations in range(budget.FULL_SIZE_POSITIONS + 1):
+        for exits in range(open_allocations + 1):
+            for signals in range(6):
+                taken, remaining = _process_bar(open_allocations, exits,
+                                                signals,
+                                                budget.INTRA_BAR_ORDER)
+                charged = (open_allocations - exits + taken) * unit
+                assert 0.0 <= charged <= cap
+                assert remaining == cap - charged
+                # Rule B: the budget stays a whole multiple of the risk unit.
+                assert abs(remaining / unit - round(remaining / unit)) < 1e-12
+
+
+def test_rule_C_composes_with_rule_A_when_slots_are_scarce():
+    """§2.4. Rule C sets how much budget exists; Rule A sets who gets it.
+
+    Book at the cap, two exits at the close of a bar with three contending
+    signals: exactly two slots, taken by the first two symbols in that bar's
+    rotation.
+    """
+    ts = _ms("2024-07-15T22:00:00Z")             # rotation 1: ETH, SOL, BTC
+    assert _priority(ts) == ("ETHUSDT", "SOLUSDT", "BTCUSDT")
+
+    slots, _ = _process_bar(budget.FULL_SIZE_POSITIONS, exits_at_this_bar=2,
+                            n_signals=3, order=budget.INTRA_BAR_ORDER)
+    assert slots == 2, "two exits free exactly two slots"
+
+    contending = {"BTCUSDT", "ETHUSDT", "SOLUSDT"}
+    allocated = [s for s in _priority(ts) if s in contending][:slots]
+    assert allocated == ["ETHUSDT", "SOLUSDT"]
+
+    # One bar later the rotation has advanced and a different pair would win.
+    later = ts + HOUR_MS
+    assert [s for s in _priority(later) if s in contending][:slots] == \
+        ["SOLUSDT", "BTCUSDT"]

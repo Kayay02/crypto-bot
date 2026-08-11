@@ -140,6 +140,31 @@ than a defensible reading.
 """
 
 # ---------------------------------------------------------------------------
+# AMENDMENT 2. Transcribed from section 7 of
+# docs/design/05b_aggregate_risk_budget_amendment_2.md. The LEVEL is unchanged
+# by it, and so is every value above.
+# ---------------------------------------------------------------------------
+
+INTRA_BAR_ORDER = "exits_before_entries"
+"""RULE C. Within a single bar close, ALL positions whose exit falls at this
+bar's close are closed first -- each returning RISK_PER_TRADE_USD -- and only
+then are that bar's signals evaluated against the remaining budget, in the
+priority order Rule A gives for that bar. Across bars nothing changes.
+
+THE SAME UNIT CAN FUND A CLOSING AND AN OPENING POSITION AT ONE BAR CLOSE, AND
+THAT IS CORRECT RATHER THAN DOUBLE COUNTING. Under report 24 section 5.3's
+half-open convention the closing position's last open bar is X and the opening
+position's first is X+1, so the two never overlap and no bar of the occupancy
+timeline carries both.
+
+DO NOT "FIX" THIS BY EVALUATING ENTRIES FIRST. That models a sequence which
+cannot occur live -- the exit order fills and releases before the entry order is
+placed -- and it is strictly MORE RESTRICTIVE, so it would skip signals the live
+account would have taken and inflate the measured skip rate by an artefact of
+loop order. A test pins both orderings and requires them to disagree.
+"""
+
+# ---------------------------------------------------------------------------
 # DERIVED. Computed, never typed twice.
 # ---------------------------------------------------------------------------
 
