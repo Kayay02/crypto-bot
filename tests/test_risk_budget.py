@@ -362,11 +362,32 @@ def test_the_module_carries_constants_and_one_integrity_check_only():
         assert word not in blob, word
 
 
+#: The only modules permitted to import `src.risk` at this commit, and why.
+#:
+#: NARROWED, DELIBERATELY, AT REPORT 26 AND RECORDED RATHER THAN LOOSENED
+#: SILENTLY. This test was written at the step-2 pre-registration to assert
+#: "NOTHING IS WIRED IN. No engine file imports src/risk. That wiring is 5.3's
+#: work", and it enforced that by refusing EVERY importer under src/. Report 26
+#: is a MEASUREMENT module and its brief required it to "read the values from
+#: src/risk/budget.py -- DO NOT re-derive or re-type them", which is the
+#: opposite of wiring: it changes no execution path and no engine behaviour, and
+#: reading the constants is what stops a second copy of a frozen number existing.
+#:
+#: So the assertion is narrowed to what it was written to MEAN -- no engine file
+#: and no execution path -- and kept with teeth: the permitted set is an explicit
+#: allowlist, so any OTHER importer appearing anywhere still fails.
+PERMITTED_RISK_IMPORTERS = {
+    os.path.join("src", "analysis", "budget_cost.py"):
+        "report 26, a measurement module: reads the constants, wires nothing",
+}
+
+
 def test_nothing_is_wired_in_yet():
-    """NO ENGINE FILE IMPORTS src/risk AT THIS COMMIT. That wiring is 5.3's.
+    """NO ENGINE FILE AND NO EXECUTION PATH IMPORTS src/risk AT THIS COMMIT.
 
     Walked over the source of every module in the repository, so a new importer
-    added anywhere fails here rather than being noticed at review.
+    added anywhere fails here rather than being noticed at review. The
+    allowlist above is the only exception and it is one measurement module.
     """
     importers = []
     for base, _, files in os.walk(os.path.join(ROOT, "src")):
@@ -381,8 +402,18 @@ def test_nothing_is_wired_in_yet():
                 continue
             src = open(path).read()
             if "src.risk" in src or "from src import risk" in src:
-                importers.append(path)
-    assert importers == [], importers
+                importers.append(os.path.relpath(path, ROOT))
+
+    assert set(importers) <= set(PERMITTED_RISK_IMPORTERS), (
+        "an unpermitted module imports src.risk: %s"
+        % sorted(set(importers) - set(PERMITTED_RISK_IMPORTERS)))
+
+    # THE ENGINE IS UNWIRED, which is the assertion that actually matters.
+    engine = [p for p in importers if p.startswith(os.path.join("src", "engine"))]
+    assert engine == [], engine
+    for path in importers:
+        assert not path.startswith(os.path.join("src", "sweep")), path
+        assert not path.startswith(os.path.join("src", "folds")), path
 
 
 # ---------------------------------------------------------------------------
