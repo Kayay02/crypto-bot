@@ -353,9 +353,13 @@ def test_the_module_carries_constants_and_one_integrity_check_only():
                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     assert functions == ["_refuse_inexact_transcription"], functions
     assert not [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]
+    # Over IDENTIFIERS ONLY: the attribute docstrings under each constant are
+    # prose and describe what the module deliberately does NOT do, so a text
+    # search would fire on the statement of the exclusion.
+    blob = _name_blob(prose="exclude")
     for word in ("allocate", "def allocation", "viable", "check_min_qty",
                  "simulate", "open_position", "skip"):
-        assert word not in _name_blob(), word
+        assert word not in blob, word
 
 
 def test_nothing_is_wired_in_yet():
@@ -400,11 +404,17 @@ def test_the_banned_list_is_the_twelve_name_one_from_report_25():
     assert len(PERFORMANCE_NAMES) == 12
 
 
-def _name_blob():
-    """Identifiers and non-docstring string literals, lowercased.
+def _name_blob(prose="include_attribute_docstrings"):
+    """Identifiers and string literals, lowercased.
 
-    Docstrings are excluded because they STATE the prohibition; a raw text
-    search would fire on the statement of the rule rather than a violation.
+    Module, function and class docstrings are ALWAYS excluded, because they
+    STATE the prohibition and a raw text search would fire on the statement of
+    the rule rather than on a violation of it.
+
+    `prose="exclude"` additionally drops ATTRIBUTE DOCSTRINGS -- the bare string
+    expressions under each constant, which Python does not treat as docstrings
+    but which are prose by construction and never a value. The firewall keeps
+    them IN, which is the stricter reading and the one reports 19-25 use.
     """
     tree = _module_ast()
     docstrings = set()
@@ -413,6 +423,12 @@ def _name_blob():
             d = ast.get_docstring(node, clean=False)
             if d is not None:
                 docstrings.add(d)
+            if prose == "exclude":
+                for stmt in getattr(node, "body", []):
+                    if (isinstance(stmt, ast.Expr)
+                            and isinstance(stmt.value, ast.Constant)
+                            and isinstance(stmt.value.value, str)):
+                        docstrings.add(stmt.value.value)
     names = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name):
@@ -440,3 +456,456 @@ def test_the_package_docstring_states_that_nothing_is_wired_in():
     from src import risk
     assert risk.__doc__ is not None
     assert "5.3" in risk.__doc__
+
+
+# ===========================================================================
+# AMENDMENT 1 -- the intra-bar tie-break and nominal-allocation rules.
+#
+# docs/design/05a_aggregate_risk_budget_amendment_1.md
+# ===========================================================================
+
+import datetime as dt            # noqa: E402  (amendment block, kept together)
+import hashlib                   # noqa: E402
+
+AMENDMENT_PATH = os.path.join(
+    ROOT, "docs", "design", "05a_aggregate_risk_budget_amendment_1.md")
+
+FROZEN_DOC_SHA256 = (
+    "d5ac7bd61323d04e75a854baf14086932470175408f5e2db4ca6f4d3afad268f")
+"""docs/design/05_aggregate_risk_budget.md as frozen at a323237."""
+
+HOUR_MS = 3_600_000
+
+
+@pytest.fixture(scope="module")
+def amendment():
+    assert os.path.exists(AMENDMENT_PATH), AMENDMENT_PATH
+    with open(AMENDMENT_PATH) as fh:
+        return fh.read()
+
+
+def _rotation(bar_open_ms):
+    """The rule, applied. Computed here because the module is constants only."""
+    return (int(bar_open_ms) // budget.ROTATION_PERIOD_MS) % \
+        budget.ROTATION_MODULUS
+
+
+def _priority(bar_open_ms):
+    return budget.SYMBOL_ROTATION[_rotation(bar_open_ms)]
+
+
+def _ms(iso):
+    return int(dt.datetime.fromisoformat(
+        iso.replace("Z", "+00:00")).timestamp() * 1000)
+
+
+# ---------------------------------------------------------------------------
+# A1. THE FROZEN DOCUMENT IS UNMODIFIED.
+# ---------------------------------------------------------------------------
+
+def test_document_05_is_byte_for_byte_unchanged():
+    """THE AMENDMENT PROCEDURE IS THE POINT, AND THIS IS WHAT ENFORCES IT.
+
+    Document 05 §11: "an amendment is a new document with a new commit and an
+    explicit statement of what changed and why; a silent edit is a
+    contamination event." A hash asserted in a test is what turns that sentence
+    into something a suite can refuse.
+    """
+    with open(DOC_PATH, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    assert digest == FROZEN_DOC_SHA256, (
+        "docs/design/05_aggregate_risk_budget.md has CHANGED. It is frozen at "
+        "a323237 and may not be edited; a correction is Amendment 2, with its "
+        "own commit.")
+
+
+def test_the_amendment_changes_no_level():
+    """THE LEVEL DID NOT CHANGE. Asserted, not merely stated in prose."""
+    assert budget.MAX_AGGREGATE_OPEN_RISK_USD == 120.00
+    assert budget.RISK_PER_TRADE_USD == 20.00
+    assert budget.ACCOUNT_CAPITAL_USD == 2000.00
+    assert budget.BUDGET_FRACTION_OF_CAPITAL == 0.06
+    assert budget.FULL_SIZE_POSITIONS == 6
+    assert budget.MARGIN_MODE == "cross"
+    assert budget.POSITION_MODE == "hedge"
+
+
+# ---------------------------------------------------------------------------
+# A2. The new constants, and the document that states them.
+# ---------------------------------------------------------------------------
+
+def test_the_amendment_constants():
+    assert budget.TIE_BREAK_RULE == "cyclic_rotation_by_bar_timestamp"
+    assert budget.ROTATION_PERIOD_MS == 3_600_000
+    assert budget.ROTATION_MODULUS == 3
+    assert budget.BUDGET_CHARGES == "nominal"
+    assert budget.SYMBOL_ROTATION == (
+        ("BTCUSDT", "ETHUSDT", "SOLUSDT"),
+        ("ETHUSDT", "SOLUSDT", "BTCUSDT"),
+        ("SOLUSDT", "BTCUSDT", "ETHUSDT"))
+    assert isinstance(budget.SYMBOL_ROTATION, tuple)
+    assert all(isinstance(order, tuple) for order in budget.SYMBOL_ROTATION)
+
+
+def test_the_rotation_period_is_the_bar_period():
+    """1h, because the timeframe is frozen at 1h. Not a free parameter."""
+    assert budget.ROTATION_PERIOD_MS == HOUR_MS
+    assert budget.ROTATION_MODULUS == len(budget.SYMBOL_ROTATION)
+    assert budget.ROTATION_MODULUS == len(budget.SYMBOL_ROTATION[0])
+
+
+def _amendment_block(text):
+    """The fenced block in §5 that states the new constants verbatim."""
+    blocks = re.findall(r"```\n(.*?)```", text, re.DOTALL)
+    hits = [b for b in blocks if "TIE_BREAK_RULE" in b]
+    assert len(hits) == 1, (
+        "the amendment must carry exactly ONE constants block; found %d"
+        % len(hits))
+    return hits[0]
+
+
+def test_the_amendment_document_states_the_same_constants(amendment):
+    """Parsed out of the markdown and required equal, as for document 05."""
+    block = _amendment_block(amendment)
+    stated = dict(CANONICAL_RE.findall(block))
+    assert stated["TIE_BREAK_RULE"].strip('"') == budget.TIE_BREAK_RULE
+    assert int(stated["ROTATION_PERIOD_MS"]) == budget.ROTATION_PERIOD_MS
+    assert int(stated["ROTATION_MODULUS"]) == budget.ROTATION_MODULUS
+    assert stated["BUDGET_CHARGES"].strip('"') == budget.BUDGET_CHARGES
+
+    # The rotation table spans several lines; parsed by symbol triples.
+    table = re.findall(r'\("([A-Z]+)", "([A-Z]+)", "([A-Z]+)"\)', block)
+    assert tuple(table) == budget.SYMBOL_ROTATION
+
+    # And the frozen document's own block is untouched by the amendment.
+    assert "TIE_BREAK_RULE" not in _canonical_block(open(DOC_PATH).read())
+
+
+def test_the_amendment_document_states_the_orderings_in_prose(amendment):
+    """The three rotations appear a second time, as prose, and must agree."""
+    for value, order in enumerate(budget.SYMBOL_ROTATION):
+        pattern = r"rotation %d\s+->\s+%s" % (value, r",\s+".join(order))
+        assert re.search(pattern, amendment), (value, order)
+    assert "MAX_AGGREGATE_OPEN_RISK_USD` REMAINS `120.00`" in amendment
+    assert FROZEN_DOC_SHA256 in amendment, (
+        "the amendment must name the hash of the document it amends")
+
+
+def test_the_amendment_document_carries_its_six_required_sections(amendment):
+    headings = re.findall(r"^## (\d+)\.\s+(.+)$", amendment, re.MULTILINE)
+    assert [int(n) for n, _ in headings] == list(range(1, 7))
+    titles = {int(n): t.upper() for n, t in headings}
+    assert "WHAT CHANGED" in titles[1]
+    assert "RULE A" in titles[2]
+    assert "RULE B" in titles[3]
+    assert "UNMODIFIED" in titles[4]
+    assert "CONSTANTS" in titles[5]
+    assert "PRE-REGISTRATION" in titles[6]
+
+    parts = re.split(r"^## \d+\.\s+", amendment, flags=re.MULTILINE)[1:]
+    required = {
+        1: ("THE LEVEL DID NOT CHANGE", "a323237"),
+        2: ("bar index", "open time", "fixed priority", "random", "starve"),
+        3: ("nominal", "inert", "0.21%", "1.26%", "0.67%", "5.3"),
+        4: ("supersedes nothing", "§3", "§4"),
+        5: ("2024-07-15T22:00:00Z", "2022-01-01T00:00:00Z"),
+        6: ("git log", "Amendment 2", "may not be edited"),
+    }
+    for number, tokens in required.items():
+        for token in tokens:
+            assert token.lower() in parts[number - 1].lower(), (number, token)
+
+
+# ---------------------------------------------------------------------------
+# A3. EXHAUSTIVE NEUTRALITY.
+# ---------------------------------------------------------------------------
+
+def test_every_three_consecutive_bars_form_a_latin_square():
+    """NEUTRALITY ACROSS ALL THREE RANKS, not merely across first place.
+
+    Over any three consecutive hourly bars, each symbol must hold each of the
+    three priority ranks exactly once. Checked at many starting offsets, since
+    a table that was neutral only from a particular phase would not be neutral.
+    """
+    start = _ms("2022-01-01T00:00:00Z")
+    for offset in range(0, 500):
+        bars = [start + (offset + k) * HOUR_MS for k in range(3)]
+        orders = [_priority(b) for b in bars]
+        assert len({tuple(o) for o in orders}) == 3, "three distinct orderings"
+        for rank in range(3):
+            at_rank = [o[rank] for o in orders]
+            assert sorted(at_rank) == ["BTCUSDT", "ETHUSDT", "SOLUSDT"], (
+                offset, rank, at_rank)
+
+
+def test_first_priority_is_exactly_equal_over_three_thousand_bars():
+    """1,000 each, exactly. Not approximately, and not in expectation."""
+    start = _ms("2022-01-01T00:00:00Z")
+    counts = {"BTCUSDT": 0, "ETHUSDT": 0, "SOLUSDT": 0}
+    for k in range(3_000):
+        counts[_priority(start + k * HOUR_MS)[0]] += 1
+    assert counts == {"BTCUSDT": 1_000, "ETHUSDT": 1_000, "SOLUSDT": 1_000}
+
+
+def test_every_rank_is_exactly_equal_over_three_thousand_bars():
+    start = _ms("2022-01-01T00:00:00Z")
+    for rank in range(3):
+        counts = {"BTCUSDT": 0, "ETHUSDT": 0, "SOLUSDT": 0}
+        for k in range(3_000):
+            counts[_priority(start + k * HOUR_MS)[rank]] += 1
+        assert counts == {"BTCUSDT": 1_000, "ETHUSDT": 1_000,
+                          "SOLUSDT": 1_000}, rank
+
+
+def test_the_rotation_advances_by_exactly_one_bar():
+    start = _ms("2023-05-05T05:00:00Z")
+    for k in range(50):
+        this = _rotation(start + k * HOUR_MS)
+        nxt = _rotation(start + (k + 1) * HOUR_MS)
+        assert nxt == (this + 1) % 3
+
+
+def test_the_rotation_does_not_couple_to_the_funding_cycle():
+    """3 and 8 are coprime, so every rotation meets every settlement phase
+    equally often over a 24-hour joint cycle. Recorded because the frozen time
+    exit is denominated in 8-hour settlements."""
+    start = _ms("2022-01-01T00:00:00Z")
+    pairs = {}
+    for k in range(24 * 100):
+        ts = start + k * HOUR_MS
+        phase = (ts // HOUR_MS) % 8      # hours since the last settlement
+        key = (_rotation(ts), phase)
+        pairs[key] = pairs.get(key, 0) + 1
+    assert len(pairs) == 24, "every (rotation, settlement phase) pair occurs"
+    assert set(pairs.values()) == {100}, "and equally often"
+
+
+def test_a_malformed_rotation_table_is_refused_at_import_time():
+    """The neutrality property is the whole content of Rule A. A table that
+    rotated first place while leaving third fixed would still index, still
+    return three symbols, and would silently favour one of them."""
+    original = budget.SYMBOL_ROTATION
+    try:
+        budget.SYMBOL_ROTATION = (
+            ("BTCUSDT", "ETHUSDT", "SOLUSDT"),
+            ("ETHUSDT", "BTCUSDT", "SOLUSDT"),   # SOL permanently third
+            ("BTCUSDT", "ETHUSDT", "SOLUSDT"))
+        with pytest.raises(ValueError, match="NOT neutral at priority rank"):
+            budget._refuse_inexact_transcription()
+
+        budget.SYMBOL_ROTATION = (("BTCUSDT", "ETHUSDT", "SOLUSDT"),)
+        with pytest.raises(ValueError, match="entries against a modulus"):
+            budget._refuse_inexact_transcription()
+    finally:
+        budget.SYMBOL_ROTATION = original
+    budget._refuse_inexact_transcription()
+
+
+# ---------------------------------------------------------------------------
+# A4. SCOPE INVARIANCE -- and the bar-index implementation that fails it.
+# ---------------------------------------------------------------------------
+
+def test_the_rotation_is_invariant_to_the_series_start():
+    """THE REASON THE RULE READS A TIMESTAMP AND NOT AN INDEX.
+
+    Report 24 runs a pooled scope that discards a 114-bar warm-up and eighteen
+    fold scopes that each begin at their own folds.json boundary. The rotation
+    for a given UTC bar must be the same in all of them.
+    """
+    target = _ms("2024-07-15T22:00:00Z")
+    expected = _rotation(target)
+    for start_offset in (0, 1, 2, 113, 114, 115, 4392, 26_190):
+        series_start = target - start_offset * HOUR_MS
+        series = [series_start + k * HOUR_MS for k in range(start_offset + 1)]
+        assert series[-1] == target
+        # Computed while walking the series, exactly as an implementation
+        # would, and required identical in every scope.
+        assert [_rotation(ts) for ts in series][-1] == expected, start_offset
+
+
+def _by_index(start_ms, ts):
+    """THE REJECTED IMPLEMENTATION: rotation from position in the series."""
+    return ((ts - start_ms) // HOUR_MS) % budget.ROTATION_MODULUS
+
+
+def test_a_bar_index_implementation_FAILS_scope_invariance():
+    """PLANTED ALTERNATIVE. The rejected implementation, asserted to break.
+
+    An index-derived rotation gives the SAME UTC BAR two different priority
+    orders in two scopes whose starts differ by a non-multiple of three hours,
+    and neither scope can tell that it disagrees with the other.
+    """
+    target = _ms("2024-07-15T22:00:00Z")
+    scope_a = target - 4_392 * HOUR_MS
+    scope_b = scope_a - 1 * HOUR_MS          # one hour earlier: 1 mod 3 apart
+
+    assert _rotation(target) == _rotation(target), "the timestamp rule agrees"
+
+    assert _by_index(scope_a, target) != _by_index(scope_b, target), (
+        "the fixture must actually produce disagreeing indices, or this test "
+        "asserts nothing")
+    assert budget.SYMBOL_ROTATION[_by_index(scope_a, target)] != \
+        budget.SYMBOL_ROTATION[_by_index(scope_b, target)], (
+        "an index-derived rotation gives one UTC bar two different priority "
+        "orders in two scopes -- which is why the rule reads the timestamp")
+
+
+def test_the_index_rule_agrees_on_todays_scopes_ONLY_BY_COINCIDENCE():
+    """§2.2.1. THE HAZARD IS LATENT, NOT ACTIVE, AND THAT IS PINNED HERE.
+
+    Every scope this project currently defines starts on a whole-day boundary
+    (24 = 3 x 8) or after the 114-bar warm-up trim (114 = 3 x 38), so every
+    scope start is congruent mod 3 and the index rule happens to agree with the
+    timestamp rule everywhere. THAT IS AN ARITHMETIC COINCIDENCE.
+
+    Asserted so that changing the warm-up to a non-multiple of three fails this
+    test and re-opens the question deliberately rather than silently.
+    """
+    target = _ms("2024-07-15T22:00:00Z")
+    scopes = {
+        "window first bar": _ms("2022-01-01T00:00:00Z"),
+        "pooled, after the 114-bar warm-up": _ms("2022-01-05T18:00:00Z"),
+        "fold 9 train start": _ms("2024-04-01T00:00:00Z"),
+        "fold 8 test start": _ms("2024-07-01T00:00:00Z"),
+    }
+    for label, start in scopes.items():
+        assert ((target - start) // HOUR_MS) % 3 == _rotation(target), label
+        assert _by_index(start, target) == _rotation(target), label
+
+    # The coincidence, stated as the arithmetic that produces it.
+    assert 24 % budget.ROTATION_MODULUS == 0, "a day is a whole cycle"
+    assert 114 % budget.ROTATION_MODULUS == 0, "so is the warm-up trim"
+    # And it ends the moment a scope start is not.
+    assert 113 % budget.ROTATION_MODULUS != 0
+    assert _by_index(_ms("2022-01-05T17:00:00Z"), target) != _rotation(target)
+
+
+# ---------------------------------------------------------------------------
+# A5. KNOWN-VALUE PINS, computed by hand.
+# ---------------------------------------------------------------------------
+
+def test_known_rotation_pins():
+    """Hand arithmetic, asserted, so a change to the rule is visible as a
+    change to a named bar rather than as a shift in an aggregate."""
+    # 2022-01-01T00:00:00Z -- the first bar of the window.
+    ts = _ms("2022-01-01T00:00:00Z")
+    assert ts == 1_640_995_200_000
+    assert ts // HOUR_MS == 455_832
+    assert 455_832 % 3 == 0
+    assert _rotation(ts) == 0
+    assert _priority(ts) == ("BTCUSDT", "ETHUSDT", "SOLUSDT")
+
+    # 2024-07-15T22:00:00Z -- report 24 §7.5's worst bar.
+    ts = _ms("2024-07-15T22:00:00Z")
+    assert ts == 1_721_080_800_000
+    assert ts // HOUR_MS == 478_078
+    assert 478_078 % 3 == 1
+    assert _rotation(ts) == 1
+    assert _priority(ts) == ("ETHUSDT", "SOLUSDT", "BTCUSDT")
+
+    # The window's own measured boundaries, from report 24 §6.
+    assert _rotation(_ms("2022-01-05T18:00:00Z")) == 0
+    assert _rotation(_ms("2024-12-31T23:00:00Z")) == 2
+
+
+def test_the_pins_in_the_document_match_the_pins_here(amendment):
+    """The document's table of hand-computed values, parsed and required equal."""
+    for iso, floor_div, modulo in (("2022-01-01T00:00:00Z", 455_832, 0),
+                                   ("2024-07-15T22:00:00Z", 478_078, 1)):
+        # Anchored on the table ROW in §5, not on any prose mention.
+        row = re.search(r"^\|\s*\*\*%s\*\*.*?$" % re.escape(iso), amendment,
+                        re.MULTILINE)
+        assert row, iso
+        text = row.group(0)
+        assert "{:,}".format(floor_div) in text, (iso, floor_div)
+        assert _rotation(_ms(iso)) == modulo
+        for symbol in budget.SYMBOL_ROTATION[modulo]:
+            assert symbol in text, (iso, symbol)
+
+
+# ---------------------------------------------------------------------------
+# A6. RULE B -- nominal charging.
+# ---------------------------------------------------------------------------
+
+def test_the_budget_charges_the_nominal_allocation():
+    assert budget.BUDGET_CHARGES == "nominal"
+    assert budget.BUDGET_CHARGES != "realised"
+
+
+def test_nominal_charging_keeps_the_remaining_budget_a_multiple_of_the_unit():
+    """SECTION 4's INERTNESS, ASSERTED AS ARITHMETIC RATHER THAN ASSUMED.
+
+    Under nominal charging the remaining budget only ever moves by exactly the
+    risk unit, so min(unit, remaining) is always the unit or zero and the
+    partial branch cannot be reached. Walked over every open/close sequence of
+    length 12 that never breaches the cap.
+    """
+    unit = budget.RISK_PER_TRADE_USD
+    cap = budget.MAX_AGGREGATE_OPEN_RISK_USD
+
+    def walk(remaining, depth):
+        if depth == 0:
+            return
+        assert abs(remaining / unit - round(remaining / unit)) < 1e-12
+        allocation = min(unit, remaining)
+        assert allocation in (0.0, unit), allocation
+        if remaining >= unit:                      # open
+            walk(remaining - unit, depth - 1)
+        if remaining < cap:                        # close
+            walk(remaining + unit, depth - 1)
+
+    walk(cap, 12)
+
+
+def test_realised_charging_would_wake_the_partial_branch():
+    """THE PLANTED ALTERNATIVE, so Rule B's necessity is pinned by a test.
+
+    Charging realised risk after flooring leaves a remainder below the unit;
+    min(unit, remainder) is then neither the unit nor zero, which is exactly the
+    partial-allocation branch the frozen document declares inert.
+    """
+    unit = budget.RISK_PER_TRADE_USD
+    cap = budget.MAX_AGGREGATE_OPEN_RISK_USD
+    # Six positions, each realising slightly under nominal because flooring
+    # only ever reduces quantity. The shortfalls are illustrative magnitudes,
+    # not measurements.
+    realised = [unit * (1.0 - f) for f in
+                (0.0021, 0.0126, 0.0067, 0.0021, 0.0126, 0.0067)]
+    remaining = cap - sum(realised)
+    assert 0.0 < remaining < unit, remaining
+    allocation = min(unit, remaining)
+    assert allocation not in (0.0, unit), (
+        "a seventh signal would be allocated a partial size -- the branch the "
+        "frozen document §4 declares INERT")
+    # Under Rule B the same six positions leave exactly zero.
+    assert cap - 6 * unit == 0.0
+
+
+def test_the_overstatement_is_conservative_and_bounded():
+    """Charged exposure exceeds true exposure, never the reverse.
+
+    Report 24 §2.2's pooled flooring losses are the bound, and they transfer
+    from notional to risk unchanged because both are linear in quantity.
+    """
+    worst_pooled = 0.0126               # ETHUSDT, report 24 §2.2
+    charged = 6 * budget.RISK_PER_TRADE_USD
+    true_risk = charged * (1.0 - worst_pooled)
+    assert true_risk < charged
+    assert (charged - true_risk) / budget.MAX_AGGREGATE_OPEN_RISK_USD < 0.02
+
+
+# ---------------------------------------------------------------------------
+# A7. The amendment changes none of the standing structural guarantees.
+# ---------------------------------------------------------------------------
+
+def test_the_module_still_imports_nothing_and_is_still_unwired():
+    assert _imports() == set(), _imports()
+    assert budget.__file__.endswith(os.path.join("src", "risk", "budget.py"))
+
+
+def test_the_module_still_carries_exactly_one_function():
+    functions = [n.name for n in ast.walk(_module_ast())
+                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    assert functions == ["_refuse_inexact_transcription"], (
+        "constants only: no rotation function, no allocation function. "
+        "Implementing them is 5.3's work.")

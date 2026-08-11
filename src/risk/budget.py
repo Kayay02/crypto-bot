@@ -75,6 +75,71 @@ cannot be switched with any open position or pending order.
 """
 
 # ---------------------------------------------------------------------------
+# AMENDMENT 1. Transcribed from section 5 of
+# docs/design/05a_aggregate_risk_budget_amendment_1.md. The LEVEL above is
+# unchanged by it; these fill two specification gaps in the frozen document's
+# section 3 and add nothing to its section 2.
+# ---------------------------------------------------------------------------
+
+TIE_BREAK_RULE = "cyclic_rotation_by_bar_timestamp"
+"""RULE A. When two or more signals arrive on the SAME BAR they are allocated in
+a priority order that rotates cyclically by bar:
+
+    rotation = (bar_open_epoch_ms // ROTATION_PERIOD_MS) mod ROTATION_MODULUS
+
+ACROSS BARS, ARRIVAL ORDER IS UNCHANGED -- an earlier bar's signals are always
+allocated before a later bar's. Rotation orders only WITHIN a bar, and a bar
+yields at most one signal per symbol (two-sided bars are skipped by thesis 4.1),
+so the rotation is a total order on the tied set.
+"""
+
+ROTATION_PERIOD_MS = 3_600_000
+"""One 1h bar, in milliseconds. THE BAR PERIOD, NOT A FREE PARAMETER: the
+timeframe is frozen at 1h by the rule at 96c96cf. If the timeframe changed this
+would change with it and the rotation would still advance once per bar."""
+
+ROTATION_MODULUS = 3
+"""Three symbols, three cyclic rotations. Coprime with the 8-hour funding
+interval, so the joint cycle is 24 hours and every rotation meets every
+settlement phase equally often."""
+
+SYMBOL_ROTATION = (
+    ("BTCUSDT", "ETHUSDT", "SOLUSDT"),
+    ("ETHUSDT", "SOLUSDT", "BTCUSDT"),
+    ("SOLUSDT", "BTCUSDT", "ETHUSDT"),
+)
+"""Priority order per rotation value: SYMBOL_ROTATION[r], highest priority first.
+
+CYCLIC ROTATIONS, NOT ARBITRARY PERMUTATIONS. Read down any column and each
+symbol appears exactly once, so each holds each of the three priority RANKS on
+exactly one bar in three -- neutrality across all three ranks, not merely across
+first place. A scheme that rotated first place while leaving third fixed would
+be biased on the rank that decides who loses the last free slot.
+
+DERIVED FROM THE TIMESTAMP, NOT FROM A BAR INDEX. An index depends on where the
+series starts, and pooled and fold-scoped runs trim different warm-ups, so the
+same UTC bar would draw different priorities in different scopes. The timestamp
+is a property of the bar; the index is a property of the slice.
+"""
+
+BUDGET_CHARGES = "nominal"
+"""RULE B. The budget is charged RISK_PER_TRADE_USD BEFORE qty_step flooring,
+and a closing position returns that same nominal figure. Realised risk after
+flooring does NOT enter budget accounting.
+
+WHY IT MATTERS: under realised-risk charging, six open positions would leave the
+sum of six flooring shortfalls as remaining budget, a seventh signal would be
+allocated that remainder, and the partial-allocation branch the frozen document
+declares INERT would become reachable -- silently, and invisibly to any test
+written at these values. The error runs conservative: charged exposure slightly
+exceeds true exposure, by under 1.3% of the budget on report 24's measurement.
+
+5.3 MUST WIRE THE BUDGET TO THIS FIGURE. Wiring it to realised risk would be a
+silent rule change; this constant is what makes that a detectable error rather
+than a defensible reading.
+"""
+
+# ---------------------------------------------------------------------------
 # DERIVED. Computed, never typed twice.
 # ---------------------------------------------------------------------------
 
@@ -129,6 +194,22 @@ def _refuse_inexact_transcription():
         raise ValueError(
             "a derived constant disagrees with the primitives it is derived "
             "from: %r positions against %r" % (FULL_SIZE_POSITIONS, ratio))
+
+    # AMENDMENT 1. The rotation table's neutrality is the whole content of
+    # Rule A, and a malformed table would still index, still return three
+    # symbols, and would silently favour one of them.
+    if len(SYMBOL_ROTATION) != ROTATION_MODULUS:
+        raise ValueError(
+            "the rotation table has %d entries against a modulus of %d; every "
+            "rotation value must index exactly one ordering"
+            % (len(SYMBOL_ROTATION), ROTATION_MODULUS))
+    for rank in range(ROTATION_MODULUS):
+        at_rank = [order[rank] for order in SYMBOL_ROTATION]
+        if len(set(at_rank)) != ROTATION_MODULUS:
+            raise ValueError(
+                "the rotation table is NOT neutral at priority rank %d: %r. "
+                "Each symbol must hold each rank exactly once, not merely hold "
+                "first place once" % (rank, at_rank))
 
 
 _refuse_inexact_transcription()
