@@ -73,3 +73,14 @@ __pycache__/
 # reference reading, NOT a market data series: no bars, no history, nothing
 # from the holdout window. ~2 KB.
 !/data/reference/bitget_instruments.json
+# bitget_venue/ is report 25's provenance artifact: the UNMODIFIED response
+# bodies of the two public v2 endpoints that publish the leverage and
+# maintenance-margin tier table and the contract specs, plus a manifest
+# recording each request URL, its parameters, the HTTP status, the UTC
+# retrieval time and the SHA-256 of each body. The tier table is what replaced
+# an unmeasured `max_leverage = 3.0` placeholder, and the venue publishes no
+# history -- so a retrieval nobody can date is a constraint that cannot be
+# defended, exactly as with bitget_fees.json. The parser reads these files back
+# from disk, so an untracked copy would also make the report unreproducible on
+# a fresh clone. ~7 KB, six responses, no market data and no bars.
+!/data/reference/bitget_venue/

@@ -1,0 +1,110 @@
+{
+  "base_url": "https://api.bitget.com",
+  "calls": [
+    {
+      "auth": "public -- no key, no signing",
+      "bytes": 832,
+      "doc_url": "https://www.bitget.com/api-doc/contract/market/Get-All-Symbols-Contracts",
+      "endpoint_name": "Get Contract Config",
+      "endpoint_path": "/api/v2/mix/market/contracts",
+      "http_status": 200,
+      "params": {
+        "productType": "USDT-FUTURES",
+        "symbol": "BTCUSDT"
+      },
+      "request_url": "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES&symbol=BTCUSDT",
+      "retrieved_at_utc": "2026-08-11T13:01:35+00:00",
+      "sha256": "b102d41600110d07a1cf7d4f6426ba4669b1e308042b31c104325c80db36e646",
+      "snapshot_file": "contracts__BTCUSDT.json"
+    },
+    {
+      "auth": "public -- no key, no signing",
+      "bytes": 829,
+      "doc_url": "https://www.bitget.com/api-doc/contract/market/Get-All-Symbols-Contracts",
+      "endpoint_name": "Get Contract Config",
+      "endpoint_path": "/api/v2/mix/market/contracts",
+      "http_status": 200,
+      "params": {
+        "productType": "USDT-FUTURES",
+        "symbol": "ETHUSDT"
+      },
+      "request_url": "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES&symbol=ETHUSDT",
+      "retrieved_at_utc": "2026-08-11T13:01:35+00:00",
+      "sha256": "edbdac63ad9d60d0558230b0eb2e6f7b59ed63850dcd7438a1d8d7cf1b2fa5ff",
+      "snapshot_file": "contracts__ETHUSDT.json"
+    },
+    {
+      "auth": "public -- no key, no signing",
+      "bytes": 829,
+      "doc_url": "https://www.bitget.com/api-doc/contract/market/Get-All-Symbols-Contracts",
+      "endpoint_name": "Get Contract Config",
+      "endpoint_path": "/api/v2/mix/market/contracts",
+      "http_status": 200,
+      "params": {
+        "productType": "USDT-FUTURES",
+        "symbol": "SOLUSDT"
+      },
+      "request_url": "https://api.bitget.com/api/v2/mix/market/contracts?productType=USDT-FUTURES&symbol=SOLUSDT",
+      "retrieved_at_utc": "2026-08-11T13:01:36+00:00",
+      "sha256": "115601119ee76d1a7ed96fb961999ac9843acb78fa946f9058fcb88245391349",
+      "snapshot_file": "contracts__SOLUSDT.json"
+    },
+    {
+      "auth": "public -- no key, no signing",
+      "bytes": 1496,
+      "doc_url": "https://www.bitget.com/api-doc/contract/position/Get-Query-Position-Lever",
+      "endpoint_name": "Get Position Tier",
+      "endpoint_path": "/api/v2/mix/market/query-position-lever",
+      "http_status": 200,
+      "params": {
+        "productType": "USDT-FUTURES",
+        "symbol": "BTCUSDT"
+      },
+      "request_url": "https://api.bitget.com/api/v2/mix/market/query-position-lever?productType=USDT-FUTURES&symbol=BTCUSDT",
+      "retrieved_at_utc": "2026-08-11T13:01:36+00:00",
+      "sha256": "a6ce67dc3eefe2f4cdb68b4d1ebe0832dbcde43ce65354a3272b46b07d063615",
+      "snapshot_file": "query-position-lever__BTCUSDT.json"
+    },
+    {
+      "auth": "public -- no key, no signing",
+      "bytes": 1857,
+      "doc_url": "https://www.bitget.com/api-doc/contract/position/Get-Query-Position-Lever",
+      "endpoint_name": "Get Position Tier",
+      "endpoint_path": "/api/v2/mix/market/query-position-lever",
+      "http_status": 200,
+      "params": {
+        "productType": "USDT-FUTURES",
+        "symbol": "ETHUSDT"
+      },
+      "request_url": "https://api.bitget.com/api/v2/mix/market/query-position-lever?productType=USDT-FUTURES&symbol=ETHUSDT",
+      "retrieved_at_utc": "2026-08-11T13:01:36+00:00",
+      "sha256": "7096dbab9e4b4923f10d9938b0d96895bd9c4633e3191c3455a45ce7a13f35f9",
+      "snapshot_file": "query-position-lever__ETHUSDT.json"
+    },
+    {
+      "auth": "public -- no key, no signing",
+      "bytes": 1239,
+      "doc_url": "https://www.bitget.com/api-doc/contract/position/Get-Query-Position-Lever",
+      "endpoint_name": "Get Position Tier",
+      "endpoint_path": "/api/v2/mix/market/query-position-lever",
+      "http_status": 200,
+      "params": {
+        "productType": "USDT-FUTURES",
+        "symbol": "SOLUSDT"
+      },
+      "request_url": "https://api.bitget.com/api/v2/mix/market/query-position-lever?productType=USDT-FUTURES&symbol=SOLUSDT",
+      "retrieved_at_utc": "2026-08-11T13:01:37+00:00",
+      "sha256": "95ff694673c3df056b10a9f1cad46139a5e6a076fed5797b5bd16a56b61ff7c3",
+      "snapshot_file": "query-position-lever__SOLUSDT.json"
+    }
+  ],
+  "documentation_note": "Endpoint paths were identified from Bitget's published API documentation pages listed as doc_url and then confirmed against the live API. Those pages are JS-rendered and return no endpoint content to an automated fetch, so they were NOT parsed and are recorded for human verification only.",
+  "product_type": "USDT-FUTURES",
+  "retrieval_method": "automated, public endpoints, no credentials",
+  "retrieved_at_utc": "2026-08-11T13:01:35+00:00",
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ]
+}
