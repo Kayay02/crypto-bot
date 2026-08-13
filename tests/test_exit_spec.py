@@ -39,6 +39,10 @@ HOUR_MS = 3_600_000
 SETTLEMENT_MS = 8 * HOUR_MS
 
 FROZEN_DESIGN_HASHES = {
+    # THE AMENDED DOCUMENT ITSELF. Amendment 1 changes not one character of it,
+    # and this is what makes that assertion rather than a claim.
+    "06_exit_resolution_spec.md":
+        "773bbafe94ba136c9bddbdc443284af96c021eb4e0894677438e0cb7622f71a0",
     "05_aggregate_risk_budget.md":
         "d5ac7bd61323d04e75a854baf14086932470175408f5e2db4ca6f4d3afad268f",
     "05a_aggregate_risk_budget_amendment_1.md":
@@ -598,3 +602,691 @@ def test_the_1m_completeness_figure_is_the_one_report_19_states(doc):
     assert 366 * 1440 == 527_040
     assert 525_600 + 525_600 + 527_040 == 1_578_240
     assert "525,600" in doc and "527,040" in doc
+
+
+# ---------------------------------------------------------------------------
+# AMENDMENT 1 -- funding in P&L, funding in the target solve, and E8's
+# out-of-sample status.
+#
+# docs/design/06a_exit_resolution_spec_amendment_1.md
+#
+# THE CENTRAL ASSERTION OF THIS BLOCK IS THAT THE TWO FUNDING FORMS ARE
+# DISTINGUISHABLE. Funding in the denominator ALONE leaves the stop identity
+# exact -- the denominator is both what sizes the position and what is lost at
+# the stop, so a term added there is added to both sides at once -- while the
+# target identity drifts to about 1.482R. That is 1.2% of the reward, it raises
+# no exception, and the identity an implementer would check first keeps passing.
+# It is asserted here in both forms so a future implementation that omits the
+# term fails loudly rather than returning a slightly smaller number forever.
+#
+# THE CARVE-OUT IS REPORT 28 SECTION 4.1's, UNWIDENED. Verifying the identities
+# requires computing net proceeds at a price. It is permitted on SYNTHETIC
+# REFERENCE INPUTS ONLY, through EXACTLY ONE named function -- asserted over the
+# AST of this module -- with the twelve-name ban otherwise intact. Nothing here
+# reads a bar or asks whether a price was reached.
+# ---------------------------------------------------------------------------
+
+import sys  # noqa: E402  (amendment block, kept together)
+
+sys.path.insert(0, os.path.join(ROOT, "src", "engine"))
+
+import costs  # noqa: E402
+import sizing  # noqa: E402
+
+AMENDMENT_PATH = os.path.join(
+    ROOT, "docs", "design", "06a_exit_resolution_spec_amendment_1.md")
+
+FROZEN_SPEC_SHA256 = FROZEN_DESIGN_HASHES["06_exit_resolution_spec.md"]
+"""docs/design/06_exit_resolution_spec.md as frozen at 6def4cb."""
+
+LONG, SHORT = sizing.LONG, sizing.SHORT
+
+REWARD_TO_RISK = 1.5
+"""Thesis §5.2, supplied explicitly and never read from the config."""
+
+#: The frozen fee/slippage configuration reports 24, 26, 27 and 28 all size
+#: against. Report 28 §3.1's carve-out conditions apply to every use of it here.
+CFG_KW = dict(stop_atr_mult=2.25, stop_max_pct=0.035,
+              rvol_threshold=1.5, baseline_days=20)
+
+#: SYNTHETIC REFERENCE CELLS. Hand-chosen prices, never a bar and never a
+#: signal. The ATR on each is small enough that the 1.50% floor sets the stop,
+#: which is the stratum §4.2's `0.0200R` comparison figure is pinned to.
+FLOOR_BOUND_CELLS = [("BTCUSDT", 30_000.0, 100.0),
+                     ("ETHUSDT", 2_000.0, 5.0),
+                     ("SOLUSDT", 100.0, 0.3)]
+
+#: The same, with the ATR setting the stop instead of the floor. Report 28 §9
+#: measured 8,457 of 11,384 candidates in this stratum.
+ATR_BOUND_CELLS = [("BTCUSDT", 30_000.0, 300.0),
+                   ("ETHUSDT", 2_000.0, 20.0),
+                   ("SOLUSDT", 100.0, 1.0)]
+
+
+@pytest.fixture(scope="module")
+def cfg():
+    return costs.CostConfig(**CFG_KW)
+
+
+@pytest.fixture(scope="module")
+def specs():
+    return sizing.load_symbol_specs()
+
+
+@pytest.fixture(scope="module")
+def ticks():
+    return sizing.load_tick_schedules()
+
+
+@pytest.fixture(scope="module")
+def amendment():
+    assert os.path.exists(AMENDMENT_PATH), AMENDMENT_PATH
+    with open(AMENDMENT_PATH) as fh:
+        return fh.read()
+
+
+def _tick(ticks, symbol):
+    """The CURRENT segment's tick, adequate for a synthetic reference."""
+    return ticks[symbol].segments[-1][1]
+
+
+def funding_per_unit(entry_price):
+    """E7.3. THE CONSTRUCTION RULE, AND IT IS THE ONLY ONE.
+
+    Three inputs and one multiplication: entry price, rate, count. NOT derived
+    from, back-solved from, or cross-checked against any R-share figure --
+    neither document 06 §6.1's 0.0200R, which is `rate x n / s` at the FLOOR
+    stop and is a comparison against the frozen budget, nor the 0.0180R realised
+    share `rate x n / (s + c)`. Both are right for their own purpose and neither
+    is the way to compute this term.
+    """
+    return (float(entry_price)
+            * es.FUNDING_RATE_PER_SETTLEMENT
+            * es.FUNDING_SETTLEMENTS_CHARGED)
+
+
+def _funded_reference(cfg, specs, ticks, symbol, direction, entry, atr,
+                      risk_usd=20.0, funding_in_bracket=True):
+    """One SYNTHETIC sized position with funding in the denominator.
+
+    Report 28's order of operations, unchanged, with `funding_pu` added to the
+    denominator per E7.2. `funding_in_bracket` selects between the SPECIFIED
+    target solve and the defective one that omits the term from the cost
+    bracket, so the two can be compared by test rather than by prose.
+
+    NO BAR IS READ. Entry price and ATR are hand-written numbers.
+    """
+    spec = specs[symbol]
+    tick = _tick(ticks, symbol)
+
+    raw = sizing.stop_distance(entry, atr)
+    stop = sizing.stop_price_on_tick(entry, raw, direction, tick)
+    effective = sizing.effective_stop_distance(entry, stop, direction)
+
+    d_no_funding = sizing.per_unit_denominator(entry, stop, direction, cfg,
+                                               symbol)
+    funding_pu = funding_per_unit(entry)
+    d = d_no_funding + funding_pu
+
+    qty_unfloored = risk_usd / d
+    qty = sizing.floor_to_step(qty_unfloored, spec.qty_step)
+    realised = qty * d
+
+    f = float(cfg.taker_fee)
+    m = float(cfg.maker_fee)
+    e = float(cfg.entry_slippage_bps) / 10_000.0
+    bracket = funding_pu if funding_in_bracket else 0.0
+
+    if direction == LONG:
+        target = (REWARD_TO_RISK * d + bracket + entry * (1.0 + f + e)) \
+            / (1.0 - m)
+        on_tick = costs.round_to_tick(target, tick, "up")
+    else:
+        target = (entry * (1.0 - f - e) - REWARD_TO_RISK * d - bracket) \
+            / (1.0 + m)
+        on_tick = costs.round_to_tick(target, tick, "down")
+
+    return dict(symbol=symbol, direction=direction, entry=entry, tick=tick,
+                stop=stop, stop_distance=effective,
+                denominator_ex_funding=d_no_funding, funding_pu=funding_pu,
+                denominator=d, qty_unfloored=qty_unfloored, qty=qty,
+                realised_risk_usd=realised, target=target,
+                target_on_tick=on_tick,
+                floor_bound=sizing.floor_binds(entry, atr))
+
+
+def net_proceeds_per_unit_with_funding(entry_price, exit_price, direction, cfg,
+                                       exit_fee_rate, funding_pu,
+                                       exit_haircut_fraction=0.0):
+    """THE RECORDED CARVE-OUT, AND THIS MODULE'S ONLY ONE.
+
+    Report 28 §4.1 permits computing net proceeds at a price under three
+    conditions, all asserted below: SYNTHETIC REFERENCE INPUTS ONLY, EXACTLY ONE
+    NAMED FUNCTION, and the twelve-name ban otherwise intact. This is that one
+    function for the exit specification, and it does not widen the carve-out --
+    it reuses `sizing.net_proceeds_per_unit` verbatim and subtracts the single
+    term Amendment 1 adds.
+
+    E7.1: `funding_pu` is the PROVISIONED charge and it is subtracted whatever
+    the exit was. There is no reconciliation to the settlements actually
+    crossed, so the same term is charged at a stop, at a target and at a time
+    exit alike.
+
+    IT DOES NOT ASK WHETHER A PRICE WAS REACHED. The exit price is supplied by
+    the caller. It is arithmetic on two prices.
+    """
+    return sizing.net_proceeds_per_unit(
+        entry_price, exit_price, direction, cfg, exit_fee_rate,
+        exit_haircut_fraction) - float(funding_pu)
+
+
+# ---------------------------------------------------------------------------
+# A1. THE CONSTANTS, AND THE AMENDMENT THAT STATES THEM.
+# ---------------------------------------------------------------------------
+
+def test_the_amendment_constants():
+    assert es.FUNDING_REALISED_TREATMENT == "provisioned_not_reconciled"
+    assert es.FUNDING_IN_TARGET_SOLVE is True
+    assert es.MISSING_BAR_INERT_IN_SAMPLE is True
+
+
+def test_no_frozen_constant_changed_value():
+    """AMENDMENT 1 REVERSES NO RULE. E1-E6 and E9 are untouched, and every
+    value document 06 §10 states stands exactly as frozen."""
+    assert es.EXIT_RESOLUTION == "1m"
+    assert es.STOP_FILL_RULE == "touch_inclusive"
+    assert es.TARGET_FILL_RULE == "trade_through_one_tick"
+    assert es.INTRABAR_PRECEDENCE == "stop_first"
+    assert es.TIME_EXIT_VS_STOP == "stop_first"
+    assert es.FUNDING_CHARGED == "in_sizing_denominator_at_entry"
+    assert es.FUNDING_SETTLEMENTS_CHARGED == 3
+    assert es.FUNDING_RATE_PER_SETTLEMENT == 0.0001
+    assert es.MISSING_BAR_RULE == "flag_and_count"
+    assert es.TRIGGER_PRICE_BASIS == "fill_price"
+    assert es.TRIGGER_PRICE_PARAMETER == "triggerType"
+
+
+def _flat(text):
+    """Whitespace-collapsed, so a prose assertion is about the SENTENCE and not
+    about where the paragraph happened to wrap."""
+    return re.sub(r"\s+", " ", text)
+
+
+def _amendment_block(text):
+    blocks = re.findall(r"```\n(.*?)```", text, re.DOTALL)
+    hits = [b for b in blocks if "FUNDING_REALISED_TREATMENT" in b]
+    assert len(hits) == 1, (
+        "the amendment must carry exactly ONE constants block; found %d"
+        % len(hits))
+    return dict(CANONICAL_RE.findall(hits[0]))
+
+
+def test_the_amendment_document_states_the_same_constants(amendment):
+    """PARSED FROM THE MARKDOWN, so a transcription drift fails."""
+    import ast as _ast
+
+    stated = _amendment_block(amendment)
+    assert set(stated) == {"FUNDING_REALISED_TREATMENT",
+                           "FUNDING_IN_TARGET_SOLVE",
+                           "MISSING_BAR_INERT_IN_SAMPLE"}
+    for name, raw in stated.items():
+        assert _ast.literal_eval(raw) == getattr(es, name), name
+    assert _ast.literal_eval(stated["FUNDING_IN_TARGET_SOLVE"]) is True
+    assert _ast.literal_eval(stated["MISSING_BAR_INERT_IN_SAMPLE"]) is True
+
+
+def test_a_planted_drift_between_amendment_and_module_is_detected(amendment):
+    stated = _amendment_block(amendment)
+    stated["FUNDING_REALISED_TREATMENT"] = '"provisioned_then_reconciled"'
+    assert stated["FUNDING_REALISED_TREATMENT"].strip('"') \
+        != es.FUNDING_REALISED_TREATMENT
+
+
+def test_the_frozen_canonical_block_is_untouched_by_the_amendment(doc,
+                                                                  amendment):
+    """DOCUMENT 06 §10 STILL CARRIES EXACTLY ITS ELEVEN ORIGINAL NAMES.
+
+    The amendment ADDS constants; it does not edit the frozen block, and it does
+    not restate it either -- a second copy of the canonical block would make
+    `_canonical_block`'s "exactly one" assertion a matter of which file was read.
+    """
+    stated = _canonical_block(doc)
+    assert len(stated) == 11
+    assert "FUNDING_REALISED_TREATMENT" not in stated
+    assert "EXIT_RESOLUTION" not in _amendment_block(amendment)
+
+
+def test_the_amendment_names_the_hashes_of_all_four_frozen_documents(amendment):
+    """THE AMENDMENT MUST NAME WHAT IT LEAVES UNALTERED."""
+    for name, expected in FROZEN_DESIGN_HASHES.items():
+        assert expected in amendment, name
+    assert FROZEN_SPEC_SHA256 in amendment
+    assert "6def4cb" in amendment, "the commit document 06 is frozen at"
+
+
+def test_document_06_is_byte_for_byte_unchanged():
+    """THE AMENDMENT PROCEDURE IS THE POINT, AND THIS IS WHAT ENFORCES IT.
+
+    Document 06 §8: an amendment is a new document with its own commit; a silent
+    edit is a contamination event. This test must fail if document 06 ever
+    differs by a single character, whatever the reason.
+    """
+    with open(DOC_PATH, "rb") as fh:
+        digest = hashlib.sha256(fh.read()).hexdigest()
+    assert digest == FROZEN_SPEC_SHA256, (
+        "docs/design/06_exit_resolution_spec.md HAS BEEN EDITED. It is frozen "
+        "at 6def4cb and a correction is a new document, never an edit.")
+
+
+def test_the_amendment_carries_its_required_sections(amendment):
+    headings = re.findall(r"^## (\d+)\.\s+(.+)$", amendment, re.MULTILINE)
+    assert [int(n) for n, _ in headings] == list(range(1, 11))
+    titles = {int(n): t.upper() for n, t in headings}
+    assert "NOT REVERSED" in titles[1]
+    assert "NOT RECONCILED" in titles[2]
+    assert "BOTH SIDES" in titles[3]
+    assert "CONSTRUCTION" in titles[4]
+    assert "INERT IN-SAMPLE" in titles[5]
+    assert "CONSTANTS" in titles[6]
+    assert "UNMODIFIED" in titles[7]
+    assert "ESCALATION CLAUSE" in titles[8]
+    assert "PRE-REGISTRATION" in titles[9]
+    assert "MAY NOT BE EDITED" in titles[10]
+
+    parts = [_flat(p) for p
+             in re.split(r"^## \d+\.\s+", amendment, flags=re.MULTILINE)[1:]]
+    required = {
+        1: ("E1 through E6 and E9 are untouched", "not one character",
+            "gaps, not corrections"),
+        2: ("−1.0R", "+1.5R", "40.0%", "39.7%", "0.0067R", "21 of"),
+        3: ("1.482R", "invisible without looking", "invariant to the quantity"),
+        4: ("0.0200R", "0.0180R", "entry × rate × count", "floor"),
+        5: ("1,578,240", "zero times", "unknown", "MAKER_NONFILL_COST_R",
+            "even when it is zero", "separately"),
+        6: ("provisioned_not_reconciled", "no logic"),
+        7: ("supersedes nothing", "6def4cb"),
+        8: ("one amendment", "re-specify", "not to write amendment 2"),
+        9: ("git log", "synthetic reference inputs only", "no 1m bar was read"),
+        10: ("contamination event", "in advance"),
+    }
+    for number, tokens in required.items():
+        for token in tokens:
+            assert token.lower() in parts[number - 1].lower(), (number, token)
+
+
+# ---------------------------------------------------------------------------
+# A2. THE TWO IDENTITIES -- funding on BOTH sides, and the form that fails.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("symbol,entry,atr", ATR_BOUND_CELLS + FLOOR_BOUND_CELLS)
+@pytest.mark.parametrize("direction", [LONG, SHORT])
+def test_the_R_identities_hold_with_funding_on_BOTH_sides(
+        cfg, specs, ticks, symbol, entry, atr, direction):
+    """E7.1 AND E7.2 TOGETHER, AT A FLOORED QUANTITY, LONG AND SHORT.
+
+    With `funding_pu` in the denominator AND in the target cost bracket, a stop
+    exit returns exactly -1.0 realised risk units and a target exactly +1.5.
+    That is what E7.1 buys: report 28's identities and the thesis's 40.0% / 53.6%
+    arithmetic hold EXACTLY rather than approximately.
+
+    THE TARGET IS ASSERTED TWICE -- exactly on the unrounded solve, and within
+    ONE TICK and always FAVOURABLE on the tick-rounded price, which is report 28
+    §4.2's own result and its reason: the target rounds AWAY from entry and can
+    therefore only deliver more than the reward, never less.
+    """
+    p = _funded_reference(cfg, specs, ticks, symbol, direction, entry, atr)
+    assert p["qty"] < p["qty_unfloored"], "the fixture must actually floor"
+    assert p["funding_pu"] > 0.0
+
+    haircut = cfg.haircut_bps(symbol) / 10_000.0
+    at_stop = net_proceeds_per_unit_with_funding(
+        entry, p["stop"], direction, cfg, cfg.taker_fee, p["funding_pu"],
+        haircut) * p["qty"]
+    assert at_stop == pytest.approx(-1.0 * p["realised_risk_usd"], rel=1e-12)
+
+    at_target = net_proceeds_per_unit_with_funding(
+        entry, p["target"], direction, cfg, cfg.maker_fee,
+        p["funding_pu"]) * p["qty"]
+    assert at_target == pytest.approx(1.5 * p["realised_risk_usd"], rel=1e-12)
+
+    on_tick = net_proceeds_per_unit_with_funding(
+        entry, p["target_on_tick"], direction, cfg, cfg.maker_fee,
+        p["funding_pu"]) * p["qty"]
+    excess = on_tick / p["realised_risk_usd"] - 1.5
+    assert excess >= 0.0, "tick rounding must never deliver LESS than 1.5R"
+    assert excess <= p["tick"] / p["denominator"], "never more than one tick"
+
+
+@pytest.mark.parametrize("symbol,entry,atr", FLOOR_BOUND_CELLS)
+@pytest.mark.parametrize("direction", [LONG, SHORT])
+def test_the_target_identity_FAILS_with_funding_in_the_DENOMINATOR_ONLY(
+        cfg, specs, ticks, symbol, entry, atr, direction):
+    """THE FAILURE E7.2 EXISTS TO PREVENT, ASSERTED SO IT CANNOT RETURN.
+
+    Funding in `d` alone leaves the STOP identity exact -- the denominator is
+    both what sizes the position and what is lost at the stop, so a term added
+    there is added to both sides at once -- while the TARGET identity drifts to
+    `1.5R - funding_pu / d`, about 1.482R at the floor stop.
+
+    The two forms must be distinguishable BY TEST, not only by prose, so a
+    future implementation that omits the term from the cost bracket fails loudly
+    instead of returning a slightly smaller number forever.
+    """
+    bad = _funded_reference(cfg, specs, ticks, symbol, direction, entry, atr,
+                            funding_in_bracket=False)
+    good = _funded_reference(cfg, specs, ticks, symbol, direction, entry, atr)
+    assert bad["floor_bound"] is True, "the 1.482R figure is a floor-stop one"
+    assert bad["denominator"] == good["denominator"], (
+        "the two forms must differ ONLY in the cost bracket")
+    assert bad["target"] != good["target"]
+
+    haircut = cfg.haircut_bps(symbol) / 10_000.0
+
+    # THE STOP IDENTITY STILL PASSES. That is exactly why the defect is
+    # invisible: the identity an implementer checks first is unaffected.
+    at_stop = net_proceeds_per_unit_with_funding(
+        entry, bad["stop"], direction, cfg, cfg.taker_fee, bad["funding_pu"],
+        haircut) * bad["qty"]
+    assert at_stop == pytest.approx(-1.0 * bad["realised_risk_usd"], rel=1e-12)
+
+    # THE TARGET IDENTITY DOES NOT.
+    at_target = net_proceeds_per_unit_with_funding(
+        entry, bad["target"], direction, cfg, cfg.maker_fee,
+        bad["funding_pu"]) * bad["qty"]
+    ratio = at_target / bad["realised_risk_usd"]
+    drift = bad["funding_pu"] / bad["denominator"]
+
+    assert ratio != pytest.approx(1.5, rel=1e-9), (
+        "THE DEFECTIVE SOLVE MUST MISS THE TARGET IDENTITY")
+    assert ratio == pytest.approx(1.5 - drift, rel=1e-12)
+    assert 1.4820 < ratio < 1.4830, ratio
+    assert 0.0170 < drift < 0.0180, drift
+
+
+def test_QUANTITY_INVARIANCE_is_preserved_with_funding_present(cfg, specs,
+                                                               ticks):
+    """REPORT 28 §3.2's CENTRAL TEST, RE-RUN WITH THE NEW TERM.
+
+    `funding_pu` depends on entry price, rate and count and NOT on quantity, so
+    it cancels from both sides of the solve exactly as the fee and slippage legs
+    do. ASSERTED, NOT ASSUMED: a term introduced as a DOLLAR charge rather than
+    a per-unit PRICE charge would break the invariance while looking correct in
+    every other respect, reinstating the exact defect report 28 exists to fix.
+    """
+    for symbol, entry, atr in ATR_BOUND_CELLS:
+        for direction in (LONG, SHORT):
+            small = _funded_reference(cfg, specs, ticks, symbol, direction,
+                                      entry, atr, risk_usd=20.0)
+            large = _funded_reference(cfg, specs, ticks, symbol, direction,
+                                      entry, atr, risk_usd=200.0)
+            assert large["qty"] > 9.0 * small["qty"], (
+                "the fixture must vary quantity")
+            assert small["target_on_tick"] == large["target_on_tick"], (
+                "THE TARGET PRICE MUST NOT DEPEND ON QUANTITY")
+            assert small["target"] == large["target"]
+            assert small["denominator"] == large["denominator"]
+            assert small["funding_pu"] == large["funding_pu"]
+
+
+# ---------------------------------------------------------------------------
+# A3. E7.3 -- CONSTRUCTION, NOT BACK-SOLVE.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("symbol,entry,atr", ATR_BOUND_CELLS)
+def test_funding_pu_is_CONSTRUCTED_and_is_not_confusable_with_0_0200R(
+        cfg, specs, ticks, symbol, entry, atr):
+    """E7.3. THE CONSTRUCTION RULE AND THE COMPARISON FIGURES MUST NOT BE
+    CONFUSABLE.
+
+    `funding_pu` is `entry x rate x count`. It is NOT `0.0200 x s` -- document
+    06 §6.1's figure is `rate x n / s` at the 1.50% FLOOR stop, correct for
+    comparison against thesis §5.3's budget and wrong as a construction rule --
+    and it is NOT `0.0180 x d`, the realised share of the risk unit.
+
+    THESE CELLS ARE NOT FLOOR-BOUND ON PURPOSE. At the floor the back-solve and
+    the construction COINCIDE exactly, which is why they are confusable at all;
+    the next test pins that coincidence so the reason is on the record.
+    """
+    p = _funded_reference(cfg, specs, ticks, symbol, LONG, entry, atr)
+    assert p["floor_bound"] is False, "this cell must be ATR-bound"
+
+    assert p["funding_pu"] == (entry * es.FUNDING_RATE_PER_SETTLEMENT
+                               * es.FUNDING_SETTLEMENTS_CHARGED)
+    assert p["funding_pu"] == funding_per_unit(entry)
+
+    back_solved_from_the_stop = 0.0200 * p["stop_distance"]
+    back_solved_from_the_unit = 0.0180 * p["denominator"]
+    assert p["funding_pu"] != pytest.approx(back_solved_from_the_stop,
+                                            rel=1e-6)
+    assert p["funding_pu"] != pytest.approx(back_solved_from_the_unit,
+                                            rel=1e-6)
+    assert back_solved_from_the_stop > p["funding_pu"], (
+        "0.0200 x s OVERSTATES the term away from the floor")
+
+    # The realised share is neither comparison figure either.
+    share = p["funding_pu"] / p["denominator"]
+    assert share != pytest.approx(0.0200, rel=1e-3)
+    assert share != pytest.approx(0.0180, rel=1e-3)
+
+
+def test_the_back_solve_COINCIDES_with_the_construction_at_the_floor_stop(
+        cfg, specs, ticks):
+    """WHY THE TRAP IS REAL, PINNED RATHER THAN ASSERTED.
+
+    At the 1.50% floor stop, `0.0200 x s` EQUALS `entry x rate x count`
+    exactly -- 9.00 against 9.00 on the BTCUSDT reference -- so an
+    implementation that back-solved the term would pass any test written at the
+    floor and be wrong by half on the 8,457 of 11,384 candidates that are not
+    floor-bound (report 28 §9).
+    """
+    symbol, entry, atr = FLOOR_BOUND_CELLS[0]
+    p = _funded_reference(cfg, specs, ticks, symbol, LONG, entry, atr)
+    assert p["floor_bound"] is True
+    assert p["stop_distance"] == pytest.approx(0.0150 * entry, rel=1e-12)
+    assert 0.0200 * p["stop_distance"] == pytest.approx(p["funding_pu"],
+                                                        rel=1e-12)
+    assert p["funding_pu"] == pytest.approx(9.00, abs=1e-9)
+
+    wide = _funded_reference(cfg, specs, ticks, symbol, LONG,
+                             entry, ATR_BOUND_CELLS[0][2])
+    assert wide["floor_bound"] is False
+    assert 0.0200 * wide["stop_distance"] == pytest.approx(13.50, abs=1e-9)
+    assert wide["funding_pu"] == pytest.approx(9.00, abs=1e-9), (
+        "the term does not move with the stop; the back-solve does")
+
+
+# ---------------------------------------------------------------------------
+# A4. E8.1 -- THE INERT BRANCH, EXERCISED AT VALUES WHERE IT IS REACHABLE.
+# ---------------------------------------------------------------------------
+
+MINUTE_MS = 60_000
+
+
+def _missing_1m_bars(present_ms, open_ms, close_ms, step_ms=MINUTE_MS):
+    """E8, as a predicate on HAND-WRITTEN integer timestamps.
+
+    Returns `(flagged, count)` for a position held across `[open, close)`. No
+    market data of any resolution is involved and the 1m seal is not touched:
+    the series here are built by `range`, not loaded.
+    """
+    have = set(int(t) for t in present_ms)
+    missing = [t for t in range(int(open_ms), int(close_ms), int(step_ms))
+               if t not in have]
+    return (len(missing) > 0, len(missing))
+
+
+def test_E8_a_synthetic_1m_series_WITH_HOLES_sets_the_flag_and_counts_them():
+    """THE REACHABLE-VALUE TEST DOCUMENT 05 §4's TREATMENT REQUIRES.
+
+    E8's flag fires zero times in-sample -- report 19 measured the 1m layer as
+    exactly full over 2022-2024 -- so without this test the branch would be
+    invisible to the entire suite. THAT IS `MAKER_NONFILL_COST_R` AGAIN: a term
+    invisible to all 545 tests then in the suite because every one of them
+    multiplied it by zero.
+    """
+    open_ms = 1_700_000_000_000
+    close_ms = open_ms + 60 * MINUTE_MS
+    full = list(range(open_ms, close_ms, MINUTE_MS))
+    assert len(full) == 60
+
+    for holes in ([5], [5, 6, 7], [0], [59], [3, 17, 42, 58]):
+        punched = [t for i, t in enumerate(full) if i not in set(holes)]
+        flagged, count = _missing_1m_bars(punched, open_ms, close_ms)
+        assert flagged is True, holes
+        assert count == len(holes), (holes, count)
+
+    # The count is the COUNT OF MISSING BARS, not a boolean in disguise.
+    one = _missing_1m_bars([t for i, t in enumerate(full) if i != 5],
+                           open_ms, close_ms)
+    many = _missing_1m_bars([t for i, t in enumerate(full) if i not in (5, 6, 7)],
+                            open_ms, close_ms)
+    assert one[1] == 1 and many[1] == 3
+    assert many[1] > one[1]
+
+
+def test_E8_a_COMPLETE_synthetic_1m_series_leaves_the_flag_clear():
+    """THE IN-SAMPLE CASE. Report 19's layer is exactly full, so this is the
+    branch every real 2022-2024 position will take: flag clear, count zero."""
+    open_ms = 1_700_000_000_000
+    close_ms = open_ms + 24 * 60 * MINUTE_MS
+    full = list(range(open_ms, close_ms, MINUTE_MS))
+    assert len(full) == 1_440
+
+    flagged, count = _missing_1m_bars(full, open_ms, close_ms)
+    assert flagged is False
+    assert count == 0
+
+    # AND THE ZERO IS REPORTED, NOT OMITTED. Report 28 §6.2's rule: a branch
+    # that is never reported is a branch nobody can tell was checked.
+    assert count == 0 and isinstance(count, int)
+
+
+def test_E8_holes_OUTSIDE_the_open_interval_do_not_flag_the_position():
+    """THE RULE IS ABOUT THE POSITION'S OWN OPEN INTERVAL.
+
+    A hole before entry or after exit is not this position's exposure, and a
+    flag that fired on it would make the flagged fraction a property of the
+    dataset rather than of the trade.
+    """
+    open_ms = 1_700_000_000_000
+    close_ms = open_ms + 60 * MINUTE_MS
+    inside = list(range(open_ms, close_ms, MINUTE_MS))
+
+    before = list(range(open_ms - 30 * MINUTE_MS, open_ms, MINUTE_MS))
+    after = list(range(close_ms, close_ms + 30 * MINUTE_MS, MINUTE_MS))
+
+    # Series complete inside the interval, punched outside it.
+    punched_outside = ([t for i, t in enumerate(before) if i != 3]
+                       + inside
+                       + [t for i, t in enumerate(after) if i != 4])
+    flagged, count = _missing_1m_bars(punched_outside, open_ms, close_ms)
+    assert flagged is False
+    assert count == 0
+
+    # And a single hole INSIDE flags, so the interval bound is load-bearing.
+    flagged, count = _missing_1m_bars(
+        [t for t in punched_outside if t != inside[10]], open_ms, close_ms)
+    assert flagged is True
+    assert count == 1
+
+
+def test_E8_is_inert_in_sample_and_the_constant_says_so():
+    """THE CONSTANT IS A STATEMENT ABOUT THE MEASUREMENT WINDOW ONLY.
+
+    Report 19's per-symbol figures reproduce the pooled total exactly, and the
+    document cites them rather than re-measuring: no 1m bar is read here.
+    """
+    assert es.MISSING_BAR_INERT_IN_SAMPLE is True
+    assert es.MISSING_BAR_RULE == "flag_and_count"
+    assert 525_600 + 525_600 + 527_040 == 1_578_240
+    assert 1_096 * 1_440 == 1_578_240
+
+
+def test_the_amendment_states_the_out_of_sample_status_of_E8(amendment):
+    """E8 IS THE ONE CONVENTION WHOSE FIRST REAL EXERCISE MAY BE OUT OF SAMPLE,
+    and the amendment must say so rather than leave it to be noticed."""
+    flat = _flat(amendment).lower()
+    assert "first real exercise may occur out of sample" in flat
+    assert "cannot be examined without opening the seal" in flat
+    for token in ("REPORT THE FLAGGED FRACTION EVEN WHEN IT IS ZERO",
+                  "MUST REPORT IT SEPARATELY"):
+        assert token.lower() in flat, token
+
+
+# ---------------------------------------------------------------------------
+# A5. THE CARVE-OUT, AND THE FIREWALL AFTER THE AMENDMENT.
+# ---------------------------------------------------------------------------
+
+def test_the_carve_out_is_EXACTLY_ONE_NAMED_FUNCTION_in_this_module():
+    """REPORT 28 §4.1's SECOND CONDITION, ASSERTED OVER THE AST.
+
+    A firewall with an undocumented exception is a firewall nobody can audit.
+    The carve-out is one function, it is named in the amendment's §9, and it is
+    not widened here: it delegates to report 28's own carve-out and subtracts
+    one term.
+    """
+    tree = ast.parse(open(__file__).read())
+    proceeds = [n.name for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and "proceeds" in n.name]
+    assert proceeds == ["net_proceeds_per_unit_with_funding"], proceeds
+
+    # AND THE SPECIFICATION MODULE HAS NO FUNCTIONS AT ALL, so it cannot hold a
+    # second copy of the arithmetic.
+    assert [n.name for n in ast.walk(_module_ast())
+            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))] == []
+
+
+def test_the_carve_out_is_reachable_from_no_source_file():
+    """SYNTHETIC REFERENCE INPUTS ONLY -- enforced by unreachability.
+
+    Nothing under `src/` names this function, so no module code path can call
+    it on a real signal, a real bar or a real position. Only the tests do, on
+    hand-chosen values.
+    """
+    for base, _, files in os.walk(os.path.join(ROOT, "src")):
+        for name in files:
+            if not name.endswith(".py"):
+                continue
+            text = open(os.path.join(base, name)).read()
+            assert "net_proceeds_per_unit_with_funding" not in text, name
+
+
+def test_the_amended_module_still_imports_nothing_at_all():
+    """THE IMPORT-GRAPH ASSERTION, RE-RUN AFTER THE AMENDMENT'S CONSTANTS.
+
+    THE 1m SEAL GAP IS STILL OPEN. A module with no imports cannot reach the 1m
+    loader, cannot reach a bar, and cannot acquire a dependency without someone
+    editing this assertion.
+    """
+    assert _imports() == set(), _imports()
+    banned = ("src.timeframe", "src.folds", "src.analysis", "src.engine",
+              "src.sweep", "src.regime", "pandas", "numpy", "pyarrow")
+    for mod in _imports():
+        for bad in banned:
+            assert not (mod == bad or mod.startswith(bad + ".")), mod
+
+
+def test_the_amendment_constants_carry_no_performance_name():
+    """THE TWELVE-NAME GUARD, ARMED AND UNCONDITIONAL AFTER THE AMENDMENT.
+
+    A GUARD FIRED WHILE THIS AMENDMENT WAS BEING WRITTEN AND IT FIRED CORRECTLY:
+    the first constant was to be named `FUNDING_PNL_TREATMENT`, which contains
+    the bare token this list bans. THE NAME WAS CHANGED, NOT THE GUARD -- adding
+    an exemption would have passed the suite and quietly turned an unconditional
+    assertion into one with a carve-out, which is the move report 28 §11.1
+    refused for the same reason.
+    """
+    names = ("FUNDING_REALISED_TREATMENT", "FUNDING_IN_TARGET_SOLVE",
+             "MISSING_BAR_INERT_IN_SAMPLE")
+    for name in names:
+        assert hasattr(es, name), name
+        for word in PERFORMANCE_NAMES:
+            assert word not in name.lower(), (name, word)
+            assert word not in str(getattr(es, name)).lower(), (name, word)
+
+    # The rejected name is not present anywhere in the module, under any guard.
+    assert "FUNDING_PNL_TREATMENT" not in open(es.__file__).read()
+
+    # And the guard itself is not relaxed: the banned token is still banned.
+    assert "pnl" in PERFORMANCE_NAMES

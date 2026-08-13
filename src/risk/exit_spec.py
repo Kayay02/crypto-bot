@@ -155,3 +155,85 @@ both boundaries."""
 
 TRIGGER_PRICE_PARAMETER = "triggerType"
 """The venue's own name for it, so the operator checklist names the right field."""
+
+
+# ---------------------------------------------------------------------------
+# AMENDMENT 1. Transcribed from section 6 of
+# `docs/design/06a_exit_resolution_spec_amendment_1.md`.
+#
+# NO VALUE ABOVE CHANGES. Three gaps in E7 and E8 are made determinate; no rule
+# in the frozen document is reversed. E1-E6 and E9 are untouched, and document
+# 06 is unaltered at 6def4cb -- its SHA-256 is asserted by test.
+# ---------------------------------------------------------------------------
+
+FUNDING_REALISED_TREATMENT = "provisioned_not_reconciled"
+"""E7.1. Funding is charged at the PROVISIONED count -- three settlements -- in
+BOTH sizing and realised P&L. THERE IS NO RECONCILIATION to the settlements
+actually crossed, at any point.
+
+THE CONSEQUENCE: a stop exit returns exactly -1.0R and a target exit exactly
++1.5R, so report 28's identities and the thesis's 40.0% breakeven and 53.6%
+detectable-edge arithmetic hold EXACTLY rather than approximately. R stays a
+fixed unit, decided at entry and never revised.
+
+THE COST: document 06 section 6 enumerates 21 of 24 entry hours crossing TWO
+settlements while three are charged, so the typical position is overcharged by
+one settlement -- about 0.0067R -- inside its own risk unit, and the overcharge
+is never refunded. That charge is already disclosed in document 06 section 5.4;
+this states which of two readings of that paragraph is operative.
+
+WHY NOT THE RECONCILED READING. It is more faithful to cash flow and it is
+rejected anyway: it moves the frozen 40.0% breakeven to about 39.7% and makes
+every R multiple depend on the entry hour. A unit that varies with the clock is
+not a unit. The choice is for determinacy of the risk unit, and the faithfulness
+it gives up is named rather than hidden."""
+
+FUNDING_IN_TARGET_SOLVE = True
+"""E7.2. The per-unit funding term appears on BOTH sides of the target solve:
+in the cost bracket AND in the denominator. Both, not one.
+
+    long   (T - entry) - [ entry x f + T x m + entry x e + funding_pu ] = RR x d
+    short  (entry - T) - [ entry x f + T x m + entry x e + funding_pu ] = RR x d
+
+THE FAILURE THIS PREVENTS. Funding in the denominator ALONE leaves the stop
+identity exact -- the denominator is both what sizes the position and what is
+lost at the stop, so a term added there is added to both sides at once -- while
+the target identity drifts to about 1.5R - 0.018R, roughly 1.482R. The error is
+invisible without looking for it, and the identity an implementer would check
+first keeps passing. The two forms are made distinguishable by test.
+
+E7.3 -- BY CONSTRUCTION, NOT BY BACK-SOLVE. The term is
+
+    funding_pu = entry_price x FUNDING_RATE_PER_SETTLEMENT
+                             x FUNDING_SETTLEMENTS_CHARGED
+
+and it is NOT derived from any R-share figure. Document 06 section 6.1's 0.0200R
+is `rate x n / s` at the 1.50% FLOOR stop, correct for comparison against the
+frozen budget and wrong as a construction rule; the realised share of the risk
+unit is `rate x n / (s + c)`, about 0.0180R, because the risk unit includes
+costs. Both are right for their own purpose and neither is the way to compute
+the term. At the floor stop the back-solve coincides with the construction
+exactly, which is why they are confusable; away from it they diverge by half.
+
+QUANTITY INVARIANCE IS PRESERVED. The term depends on entry price, rate and
+count and NOT on quantity, so report 28 section 3.2's central result stands: the
+target price is invariant to the quantity. Asserted, not assumed."""
+
+MISSING_BAR_INERT_IN_SAMPLE = True
+"""E8.1. Report 19 establishes the 1m layer is exactly full over 2022-2024 --
+1,578,240 rows, 525,600 / 525,600 / 527,040 per symbol, zero buckets dropped --
+so E8's flag will fire ZERO times during validation.
+
+THE OUT-OF-SAMPLE WINDOW'S 1m COMPLETENESS IS UNKNOWN and cannot be established
+without breaking the seal, since examining it is examining it. E8 is therefore
+the one convention in document 06 whose FIRST REAL EXERCISE MAY OCCUR OUT OF
+SAMPLE, where a surprise cannot be absorbed by revising anything.
+
+WHAT FOLLOWS, ON THE DOCUMENT 05 SECTION 4 TREATMENT OF AN INERT BRANCH: E8
+carries tests that exercise it at values where it IS reachable -- a synthetic 1m
+series with deliberate holes, asserting the flag is set and the count correct --
+because a branch no test reaches is `MAKER_NONFILL_COST_R` again, a term
+invisible to all 545 tests then in the suite because every one of them
+multiplied it by zero. 5.3.4 must report the flagged fraction EVEN WHEN IT IS
+ZERO, and any out-of-sample run must report it SEPARATELY, so a non-zero figure
+there is visible immediately rather than inferred later."""
