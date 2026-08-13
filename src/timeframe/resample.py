@@ -26,7 +26,6 @@ NO OPEN. `open_synth` is dropped at every load boundary and never read.
 """
 
 import datetime as dt
-import glob
 import os
 
 import pandas as pd
@@ -138,13 +137,21 @@ def _one_minute_paths(symbol, derived_dir=DERIVED):
     Globbing `year=*` would pick up 2025 and 2026, which are present on disk.
     The years are enumerated explicitly so that the set of files opened is a
     stated constant rather than whatever the filesystem happens to hold.
+
+    ROUTED THROUGH THE SEALED LOADER at 5.3.3 rather than enumerating a second
+    time here. Two enumerations of the same partition tree are two things that
+    can drift apart, and the one that drifts is the one nobody is looking at.
+    `sealed_1m.allowed_paths` reads its years from `ALLOWED_YEARS` above -- this
+    module still owns the boundary -- and additionally excludes dataset-level
+    sidecars, which a `*.parquet` glob would not have, and asserts over the list
+    before returning it, which this function never did.
+
+    Imported inside the function because `sealed_1m` imports this module for the
+    boundary; the dependency runs one way at import time and the other at call
+    time, which is what keeps the boundary defined in exactly one place.
     """
-    paths = []
-    for year in ALLOWED_YEARS:
-        pat = os.path.join(derived_dir, "ohlcv_1m", "symbol=%s" % symbol,
-                           "year=%d" % year, "*.parquet")
-        paths.extend(sorted(glob.glob(pat)))
-    return paths
+    from src.timeframe import sealed_1m
+    return sealed_1m.allowed_paths(symbol, derived_dir=derived_dir)
 
 
 def load_1m(symbol, derived_dir=DERIVED):

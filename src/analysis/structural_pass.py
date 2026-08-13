@@ -63,10 +63,24 @@ def check_manifest(derived_dir=DERIVED, root=ROOT):
     """
     import pyarrow.parquet as pq
 
+    from src.timeframe import sealed_1m
+
     manifest = json.load(open(os.path.join(derived_dir, "_manifest.json")))
     row_drift, seen, hash_drift = [], set(), []
+    sealed_skipped = []
     for rel, meta in manifest["outputs"].items():
         p = os.path.join(root, rel)
+        # SEALED 1m PARTITIONS ARE NOT FOOTER-CHECKED (5.3.3). `read_metadata`
+        # loads the parquet footer, which carries per-row-group min/max
+        # statistics on every column -- including `high`, `low` and `close`.
+        # Those extrema, for a partition inside the holdout window, ARE holdout
+        # information, and reading them is the subtlest way into a window that
+        # cannot be unread. The row count of a partition no measurement is ever
+        # permitted to read protects nothing, so it is skipped rather than
+        # checked, and the skip is REPORTED rather than silent.
+        if sealed_1m.is_sealed_path(rel):
+            sealed_skipped.append(rel)
+            continue
         if not os.path.exists(p):
             row_drift.append((rel, "missing"))
             continue
@@ -86,7 +100,8 @@ def check_manifest(derived_dir=DERIVED, root=ROOT):
     ok = not row_drift and not hash_drift
     return {"ok": ok, "git_commit": manifest.get("git_commit"),
             "outputs": len(manifest["outputs"]), "raw_sources": len(seen),
-            "row_drift": row_drift, "hash_drift": hash_drift}
+            "row_drift": row_drift, "hash_drift": hash_drift,
+            "sealed_skipped": sorted(sealed_skipped)}
 
 
 # ---------------------------------------------------------------------------

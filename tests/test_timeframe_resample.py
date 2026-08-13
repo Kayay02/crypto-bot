@@ -362,4 +362,5 @@ def test_package_imports_no_engine_strategy_or_analysis_module():
         # where the holdout boundary is defined.
         project = {m for m in imported if m.startswith("src.")}
         assert project <= {"src.folds", "src.folds.schedule", "src.timeframe",
-                           "src.timeframe.resample"}, (path, project)
+                           "src.timeframe.resample",
+                           "src.timeframe.sealed_1m"}, (path, project)
