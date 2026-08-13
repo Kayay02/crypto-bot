@@ -1,0 +1,47 @@
+{
+  "authentication_note": "The trigger basis is a PER-ORDER parameter on the order-placement endpoints, and placing an order requires a SIGNED request. The parameter's name and allowed values are publicly documented and are retrieved here; its behaviour when OMITTED cannot be established without credentials and is recorded as unretrieved.",
+  "calls": [
+    {
+      "bytes": 738091,
+      "final_url": "https://bitgetlimited.github.io/apidoc/en/mix/",
+      "http_status": 200,
+      "key": "v1_mix_doc",
+      "kind": "documentation",
+      "note": "Bitget's own STATIC v1 mix documentation mirror, served as plain HTML. Carries the triggerType parameter and its allowed values.",
+      "params": {},
+      "requested_url": "https://bitgetlimited.github.io/apidoc/en/mix/",
+      "retrieved_at_utc": "2026-08-13T09:49:28+00:00",
+      "sha256": "311ed34f82bf6defc6bf9f0489c47d036d3691ab3f37e46c475ffcb41bd07961",
+      "snapshot_file": "trigger_basis__v1_mix_doc.html"
+    },
+    {
+      "bytes": 23627,
+      "final_url": "https://www.bitget.com/api-doc/uta/intro",
+      "http_status": 200,
+      "key": "v2_place_tpsl",
+      "kind": "documentation",
+      "note": "The v2 stop-profit / stop-loss endpoint page. JS-rendered; snapshotted to record that it carries no endpoint content to an automated fetch.",
+      "params": {},
+      "requested_url": "https://www.bitget.com/api-doc/contract/plan/Place-Tpsl-Order",
+      "retrieved_at_utc": "2026-08-13T09:49:30+00:00",
+      "sha256": "fea1f4a67519e6d61b3e9d4db079d214e3006a0b1f3ebb88079eeada6f32eac4",
+      "snapshot_file": "trigger_basis__v2_place_tpsl.html"
+    },
+    {
+      "bytes": 23627,
+      "final_url": "https://www.bitget.com/api-doc/uta/intro",
+      "http_status": 200,
+      "key": "v2_place_plan",
+      "kind": "documentation",
+      "note": "The v2 trigger-order endpoint page. Same JS-rendering caveat.",
+      "params": {},
+      "requested_url": "https://www.bitget.com/api-doc/contract/plan/Place-Plan-Order",
+      "retrieved_at_utc": "2026-08-13T09:49:32+00:00",
+      "sha256": "fea1f4a67519e6d61b3e9d4db079d214e3006a0b1f3ebb88079eeada6f32eac4",
+      "snapshot_file": "trigger_basis__v2_place_plan.html"
+    }
+  ],
+  "question": "Does Bitget trigger conditional stop and take-profit orders on LAST price or MARK price, and is that a default or a per-order parameter?",
+  "retrieval_method": "automated, public pages, no credentials",
+  "retrieved_at_utc": "2026-08-13T09:49:27+00:00"
+}
