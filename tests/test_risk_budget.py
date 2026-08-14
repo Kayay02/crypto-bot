@@ -376,9 +376,27 @@ def test_the_module_carries_constants_and_one_integrity_check_only():
 #: So the assertion is narrowed to what it was written to MEAN -- no engine file
 #: and no execution path -- and kept with teeth: the permitted set is an explicit
 #: allowlist, so any OTHER importer appearing anywhere still fails.
+#: WIDENED ONCE, AT 5.3.4, BY EXACTLY ONE MODULE -- AND THE ASSERTION THAT WAS
+#: NARROWED HAS NOW BEEN SPENT AS WRITTEN. The clause above says the wiring is
+#: "5.3's work", document 05 section 10 says the budget must be wired to the
+#: nominal figure at 5.3, and report 28 section 13.5 records that
+#: `simulate.py` must be REPLACED rather than adapted. This is that replacement
+#: and this is that wiring: `src/engine/portfolio.py` is the execution path, it
+#: reads the frozen values rather than restating them, and a separate test
+#: asserts no numeric literal in it equals any of them.
+#:
+#: THE ASSERTION IS NOT RETIRED, IT IS SPENT ON ONE FILE. Every other engine
+#: file is still refused unconditionally below, and the allowlist is explicit,
+#: so a SECOND engine importer appearing anywhere still fails here.
 PERMITTED_RISK_IMPORTERS = {
     os.path.join("src", "analysis", "budget_cost.py"):
         "report 26, a measurement module: reads the constants, wires nothing",
+    os.path.join("src", "engine", "portfolio.py"):
+        "report 30, the execution path: THE wiring the clause always permitted",
+}
+
+PERMITTED_ENGINE_RISK_IMPORTERS = {
+    os.path.join("src", "engine", "portfolio.py"),
 }
 
 
@@ -408,9 +426,13 @@ def test_nothing_is_wired_in_yet():
         "an unpermitted module imports src.risk: %s"
         % sorted(set(importers) - set(PERMITTED_RISK_IMPORTERS)))
 
-    # THE ENGINE IS UNWIRED, which is the assertion that actually matters.
+    # THE ENGINE IS UNWIRED EXCEPT FOR THE ONE EXECUTION PATH 5.3.4 BUILT.
+    # Every other engine file is refused unconditionally, which is what this
+    # assertion was written to protect and what it still protects.
     engine = [p for p in importers if p.startswith(os.path.join("src", "engine"))]
-    assert engine == [], engine
+    assert set(engine) <= PERMITTED_ENGINE_RISK_IMPORTERS, (
+        "an engine file other than the 5.3.4 execution path imports src.risk: "
+        "%s" % sorted(set(engine) - PERMITTED_ENGINE_RISK_IMPORTERS))
     for path in importers:
         assert not path.startswith(os.path.join("src", "sweep")), path
         assert not path.startswith(os.path.join("src", "folds")), path

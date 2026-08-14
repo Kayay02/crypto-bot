@@ -517,20 +517,42 @@ def test_no_1m_loader_is_touched():
     assert _imports() == set()
 
 
+#: 5.3.4 DID THE WIRING, AND IT IS ONE FILE. The docstring above said "5.3.4
+#: does the wiring"; report 30's execution path is that module. Every other
+#: engine file is still refused unconditionally.
+PERMITTED_ENGINE_IMPORTER = "portfolio.py"
+
+
 def test_nothing_is_wired_in_yet():
-    """NO ENGINE FILE IMPORTS THE RISK PACKAGE. 5.3.4 does the wiring.
+    """NO ENGINE FILE IMPORTS THE RISK PACKAGE EXCEPT THE EXECUTION PATH.
 
     Report 26's assertion is enforced from its own test module; this asserts the
-    narrower fact that matters here -- the new constants are not reachable from
-    the engine.
+    narrower fact that matters here -- the constants are not reachable from any
+    engine file other than the one 5.3.4 built to read them.
     """
     engine_dir = os.path.join(ROOT, "src", "engine")
     for name in os.listdir(engine_dir):
-        if not name.endswith(".py"):
+        if not name.endswith(".py") or name == PERMITTED_ENGINE_IMPORTER:
             continue
         text = open(os.path.join(engine_dir, name)).read()
         assert "exit_spec" not in text, name
         assert "src.risk" not in text, name
+
+
+def test_the_execution_path_reads_the_spec_rather_than_restating_it():
+    """THE ONE PERMITTED IMPORTER, AND WHAT IT IS PERMITTED TO DO.
+
+    It may READ these constants. It may not carry a second copy of any of them:
+    `tests/test_portfolio.py` asserts no numeric literal in it equals a frozen
+    value, and this asserts the values it uses are this module's own objects.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "src", "engine"))
+    import portfolio
+
+    assert portfolio.FUNDING_RATE is es.FUNDING_RATE_PER_SETTLEMENT
+    assert portfolio.FUNDING_COUNT is es.FUNDING_SETTLEMENTS_CHARGED
+    text = open(portfolio.__file__).read()
+    assert "exit_spec" in text, "the execution path must READ the spec"
 
 
 PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",

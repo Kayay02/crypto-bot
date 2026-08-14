@@ -707,13 +707,58 @@ def test_the_loader_computes_nothing():
             assert not (module == bad or module.startswith(bad + ".")), module
 
 
-def test_nothing_in_the_engine_imports_the_sealed_loader_yet():
-    """5.3.4 does the wiring. Nothing is wired in at this commit."""
+#: 5.3.4 DID THE WIRING. Report 30's execution path is the ONE engine file
+#: permitted to reach 1m bars, and it reaches them only through this loader --
+#: which is the property the assertion below now enforces, in place of "nobody
+#: reaches them at all".
+PERMITTED_ENGINE_IMPORTER = "portfolio.py"
+
+
+def test_only_the_execution_path_imports_the_sealed_loader():
+    """EVERY OTHER ENGINE FILE IS STILL REFUSED UNCONDITIONALLY."""
     engine_dir = os.path.join(ROOT, "src", "engine")
     for name in sorted(os.listdir(engine_dir)):
-        if name.endswith(".py"):
+        if name.endswith(".py") and name != PERMITTED_ENGINE_IMPORTER:
             text = open(os.path.join(engine_dir, name)).read()
             assert "sealed_1m" not in text, name
+
+
+def test_the_execution_path_reaches_1m_ONLY_through_the_sealed_loader():
+    """THE ASSERTION THAT REPLACES 'NOTHING IS WIRED IN'.
+
+    The execution path may read 1m bars. It may not reach them by any other
+    route: no `ohlcv_1m` path of its own, no glob, no parquet reader, and not
+    through the engine's own unsealed-by-default loader either.
+    """
+    import ast as _ast
+
+    path = os.path.join(ROOT, "src", "engine", PERMITTED_ENGINE_IMPORTER)
+    text = open(path).read()
+    tree = _ast.parse(text)
+
+    imported = set()
+    for node in _ast.walk(tree):
+        if isinstance(node, _ast.Import):
+            for alias in node.names:
+                imported.add(alias.name)
+        elif isinstance(node, _ast.ImportFrom):
+            if node.module:
+                imported.add(node.module)
+                for alias in node.names:
+                    imported.add("%s.%s" % (node.module, alias.name))
+    assert "src.timeframe.sealed_1m" in imported
+    for banned in ("glob", "pyarrow", "pyarrow.parquet", "simulate",
+                   "src.analysis", "src.sweep"):
+        assert banned not in imported, banned
+
+    called = {n.func.attr for n in _ast.walk(tree)
+              if isinstance(n, _ast.Call) and isinstance(n.func, _ast.Attribute)}
+    for banned in ("read_parquet", "read_table", "read_metadata", "glob",
+                   "load_1m"):
+        assert banned not in called, banned
+
+    assert "ohlcv_1m" not in text
+    assert "year=" not in text
 
 
 # ---------------------------------------------------------------------------
