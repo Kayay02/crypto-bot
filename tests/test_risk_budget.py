@@ -442,16 +442,16 @@ def test_nothing_is_wired_in_yet():
 # 5. THE FIREWALL -- the twelve-name guard from report 25.
 # ---------------------------------------------------------------------------
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "sortino", "net_pnl", "gross_pnl", "drawdown",
-                     "r_multiple", "equity", "pnl")
-"""The nine from reports 19-21 plus the three report 24 §9.5 flagged as missing
-and report 25 added. The list only ever grows; a test pins that."""
+from src.firewall import (PERFORMANCE_NAMES,  # noqa: E402
+                          INHERITED_FROM_REPORT_24)
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 
 def test_the_banned_list_is_the_twelve_name_one_from_report_25():
-    inherited = ("expectancy", "win_rate", "winrate", "profit_factor",
-                 "sharpe", "net_pnl", "r_multiple", "equity", "pnl")
+    inherited = INHERITED_FROM_REPORT_24
     assert set(inherited) <= set(PERFORMANCE_NAMES)
     assert {"drawdown", "sortino", "gross_pnl"} <= set(PERFORMANCE_NAMES)
     assert len(PERFORMANCE_NAMES) == 12

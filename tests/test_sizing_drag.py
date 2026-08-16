@@ -397,9 +397,11 @@ def test_size_population_refuses_a_holdout_bar():
         sd.size_population(frame)
 
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "sortino", "net_pnl", "gross_pnl", "drawdown",
-                     "r_multiple", "equity", "pnl")
+from src.firewall import PERFORMANCE_NAMES  # noqa: E402
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 
 def test_no_performance_quantity_appears_in_the_module():

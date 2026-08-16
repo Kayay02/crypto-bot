@@ -555,9 +555,11 @@ def test_the_execution_path_reads_the_spec_rather_than_restating_it():
     assert "exit_spec" in text, "the execution path must READ the spec"
 
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "sortino", "net_pnl", "gross_pnl", "drawdown",
-                     "r_multiple", "equity", "pnl")
+from src.firewall import PERFORMANCE_NAMES  # noqa: E402
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 
 def test_no_performance_quantity_appears_in_the_module():

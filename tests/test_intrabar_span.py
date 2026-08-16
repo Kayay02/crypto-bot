@@ -510,9 +510,11 @@ def test_the_engine_solver_is_called_only_from_the_reference_path():
     assert "costs" not in used
 
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "sortino", "net_pnl", "gross_pnl", "drawdown",
-                     "r_multiple", "equity", "pnl")
+from src.firewall import PERFORMANCE_NAMES  # noqa: E402
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 ALLOWED_CONFIG_FIELDS = ("target_r_multiple",)
 """ONE CARVE-OUT, AND IT IS THE ENGINE'S OWN FIELD NAME.

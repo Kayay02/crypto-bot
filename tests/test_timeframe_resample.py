@@ -294,8 +294,11 @@ def test_open_synth_appears_nowhere_in_the_package():
         assert src.count('"open_synth"') <= 1, path
 
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "net_pnl", "r_multiple", "equity", "pnl")
+from src.firewall import PERFORMANCE_NAMES  # noqa: E402
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 
 def test_no_performance_quantity_appears_in_the_package():

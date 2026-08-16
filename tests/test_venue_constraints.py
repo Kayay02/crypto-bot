@@ -621,18 +621,17 @@ def test_the_client_conventions_come_from_the_existing_settings():
 # 9. THE FIREWALL, over the module's AST. WIDENED.
 # ---------------------------------------------------------------------------
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "sortino", "net_pnl", "gross_pnl", "drawdown",
-                     "r_multiple", "equity", "pnl")
-"""Reports 19-21 and 24 carried nine names. Report 24 §9.5 recorded that
-`drawdown`, `sortino` and `gross_pnl` were absent from that list; they are
-added here. The list only ever grows."""
+from src.firewall import (PERFORMANCE_NAMES,  # noqa: E402
+                          INHERITED_FROM_REPORT_24)
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 
 def test_the_widened_banned_list_is_a_superset_of_report_24s():
     """The widening is asserted, so it cannot be quietly dropped later."""
-    inherited = ("expectancy", "win_rate", "winrate", "profit_factor",
-                 "sharpe", "net_pnl", "r_multiple", "equity", "pnl")
+    inherited = INHERITED_FROM_REPORT_24
     assert set(inherited) <= set(PERFORMANCE_NAMES)
     assert {"drawdown", "sortino", "gross_pnl"} <= set(PERFORMANCE_NAMES)
 

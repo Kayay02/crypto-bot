@@ -412,9 +412,11 @@ def test_no_engine_entry_point_is_invoked():
     assert "exit_reason" not in source
 
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "sortino", "net_pnl", "gross_pnl", "drawdown",
-                     "r_multiple", "equity", "pnl")
+from src.firewall import PERFORMANCE_NAMES  # noqa: E402
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 
 def test_the_twelve_name_firewall_is_armed_over_the_module():

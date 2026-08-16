@@ -513,10 +513,11 @@ def test_no_measured_position_touches_the_seal(measured):
 # 10. THE FIREWALL, AND THE FORBIDDEN IMPORT.
 # ---------------------------------------------------------------------------
 
-PERFORMANCE_NAMES = ("expectancy", "win_rate", "winrate", "profit_factor",
-                     "sharpe", "sortino", "net_pnl", "gross_pnl", "drawdown",
-                     "r_multiple", "equity", "pnl")
-"""Report 25's twelve-name list. It only ever grows."""
+from src.firewall import PERFORMANCE_NAMES  # noqa: E402
+"""The canonical twelve-name list, defined once at `src/firewall.py`.
+
+Previously written out in full here. Eighteen copies had drifted into two
+different lists; this module now imports the one definition."""
 
 
 def _imports():
