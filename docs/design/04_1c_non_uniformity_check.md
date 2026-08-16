@@ -234,16 +234,151 @@ would have produced a smaller numerator and a more comfortable margin.
 
 ## 5. THE DERIVATION AND ITS RESULTS
 
-*(Written in commit two. §1 to §4 above are unchanged from commit one.)*
+**Module: `src/analysis/haircut_share.py`.** The haircut's contribution is taken
+from the implementation **by difference** — `costs.position_size` is called once
+with the frozen configuration and once with a configuration whose haircut rates
+are zeroed, and the difference is the term. **No cost term is restated anywhere**,
+and the width comes from report 32's committed closed form, imported unchanged.
+
+### 5.1 THE DECOMPOSITION HOLDS
+
+**Maximum residual of validated plus unvalidated against the total, across all
+342 cells: 5.551e-17.** The split partitions the cost term exactly.
+
+**AND §3.4's STRUCTURAL CLAIM IS CONFIRMED.** The total cost share of the risk
+unit equals `tau / (1 + tau)` **to within 3.525e-15 at every one of the 342
+cells** — identical for every symbol and every direction. **The constraint does
+deliver a perfectly uniform bound on the total share**, so the whole question is
+the unvalidated term's fraction of it, exactly as §3.4 said before any value
+existed.
+
+### 5.2 THE UNVALIDATED SHARE OF THE RISK UNIT
+
+Percent of one risk unit, at selected grid points. BTCUSDT and ETHUSDT share a
+value; SOLUSDT is given separately. Long first, short second.
+
+- tolerance 0.020: BTC/ETH 0.559 and 0.594; SOL 0.865 and 0.918; spread 0.359
+- tolerance 0.050: BTC/ETH 1.384 and 1.417; SOL 2.139 and 2.190; spread 0.807
+- tolerance 0.110: BTC/ETH 2.899 and 2.931; SOL 4.480 and 4.529; spread 1.630
+- tolerance 0.200: BTC/ETH 4.887 and 4.917; SOL 7.553 and 7.598; spread 2.711
+- tolerance 0.300: BTC/ETH 6.774 and 6.801; SOL 10.469 and 10.510; spread 3.737
+
+**AND THE UNVALIDATED FRACTION OF THE COST TERM IS NEARLY FLAT IN THE
+TOLERANCE**: BTCUSDT and ETHUSDT move from 28.53 to 29.35 percent across the
+entire grid, SOLUSDT from 44.09 to 45.36.
+
+### 5.3 THE FACT THAT CARRIES THE FINDING
+
+> **SOLUSDT's UNVALIDATED SHARE IS A CONSTANT MULTIPLE OF BTCUSDT's — 1.5455 —
+> AT EVERY POINT OF THE GRID.** The maximum and the minimum of that ratio agree
+> to within 1e-12.
+
+The tolerance enters both symbols identically; only the haircut rate differs. **So
+the symbol effect is exactly MULTIPLICATIVE and exactly INVARIANT to the
+parameter**, while the tolerance's effect on the same quantity is a range that
+grows with the level of the quantity itself.
+
+### 5.4 THE TWO QUANTITIES §4 COMPARES
+
+- **`S_max` = 3.7367 percentage points**, at tolerance 0.300.
+- **`R_min` = 6.2069 percentage points**, at the BTCUSDT short cell.
+- **Ratio `S_max / R_min` = 0.6020.**
 
 ---
 
 ## 6. THE FINDING
 
-*(Written in commit two.)*
+### 6.1 THE VERDICT, APPLYING §4 AS WRITTEN
+
+> ### THE TRIGGER DOES NOT FIRE.
+>
+> **`S_max / R_min` = 0.6020, against a firing threshold of 1.0.** The most
+> adverse cross-symbol spread anywhere on the grid is **about three fifths** of
+> the least generous single-cell sensitivity.
+
+**IT IS NOT A MARGINAL CALL ON ITS OWN UNITS** — 0.6020 is not near 1.0 — **and
+§4.4 recorded before the answer was known that this construction is biased
+toward firing**, so a non-firing verdict under it is the stronger of the two
+verdicts it could return.
+
+### 6.2 WHAT FOLLOWS, AND ONLY THIS
+
+**THE TOTAL-COST DENOMINATION COMMITTED AT 4.1a STANDS AS A UNIFORM PROXY, AND
+4.1c-PROPER PROCEEDS.** 4.1b §5's trigger for reopening 4.1a **has not fired**,
+and 4.1a is not reopened.
+
+**NO FOLLOW-ON DOCUMENT IS WRITTEN HERE.**
+
+### 6.3 A LIMITATION OF THE TEST, RECORDED WITHOUT REVISING IT
+
+**§4.5 forbids revising the threshold after seeing the numbers, and it is not
+revised. The verdict above stands as the instrument returned it.** What follows
+is recorded so that whoever writes 4.1c-proper has it in view.
+
+**THE VERDICT IS SENSITIVE TO WHICH QUANTITY THE TEST IS DENOMINATED IN, AND THE
+SENSITIVITY IS LARGE.** Evaluating the identical criterion on the unvalidated
+term's **fraction of the cost** rather than its **share of the risk unit** gives
+`S_max` = 18.2888 points, `R_min` = 0.8235 points, and a ratio of **22.2078** —
+**it would fire, by a factor of more than twenty.**
+
+**§3.4 CHOSE THE SHARE OF THE RISK UNIT, AND CHOSE IT BEFORE ANY VALUE EXISTED**,
+on the ground that `04_1b_tolerance_and_branch.md` §3.2 defines the protected
+quantity as a share of the risk unit. **That reasoning is unchanged by the
+numbers and the choice is not revisited here.**
+
+**BUT THE STRUCTURE §5.3 EXPOSES IS NOT CAPTURED BY EITHER FORM.** The symbol
+effect is a **constant multiplicative factor of 1.5455** that no choice of
+tolerance can alter. §4's criterion compares **additive ranges**, and an additive
+comparison is dominated by the scale of the quantity at the loose end of the
+grid — which is why the same structure reads as 0.6020 in one denomination and
+22.2078 in another.
+
+> **THE HONEST STATEMENT: A CONSTANT MULTIPLICATIVE NON-UNIFORMITY OF ABOUT 55%
+> EXISTS AND IS OUTSIDE THE PARAMETER'S CONTROL, AND §4's ADDITIVE TEST DOES NOT
+> SEE IT AS DECISIVE.**
+
+**WHAT THAT DOES AND DOES NOT LICENSE.** It does not license overturning §6.1 —
+the threshold was committed first precisely so that it would not be reinterpreted
+once its answer was visible, and reinterpreting it here would be the failure the
+4.1 split exists to prevent. **It does mean the question 4.1c-proper inherits is
+not fully settled by this test**, and that a multiplicative formulation of the
+same question is available to it and was not the one committed.
+
+**IT IS RECORDED AS A LIMITATION OF THE INSTRUMENT, NOT AS A SECOND VERDICT.**
+
+### 6.4 THE ORDER, CHECKABLE
+
+- **Threshold commit, §1 to §4 alone: `af7866d7`.** `src/analysis/haircut_share.py`
+  is **absent from that commit's tree** — verifiable with `git ls-tree`.
+- **Derivation commit, §5 to §7 and the module: the commit carrying this text.**
+
+**§1 to §4 ARE BYTE-IDENTICAL BETWEEN THE TWO COMMITS.** The diff shows additions
+below the §4 boundary and no change above it.
 
 ---
 
 ## 7. WHAT THIS DOCUMENT DOES NOT DO
 
-*(Written in commit two.)*
+- **It sets no tolerance value**, and proposes none. Every quantity is reported
+  across the committed grid; no point on it is selected. **Owed to 4.1c-proper.**
+- **It evaluates no floor width beyond what the decomposition requires.** The
+  widths used are report 32's committed closed form, imported unchanged, and no
+  new width is stated. **Owed to 4.1c-proper.**
+- **It does not reopen 4.1a**, whose §8 is the only route and which is not
+  triggered by §6.1's verdict.
+- **It does not perform the dominance check** named as owed at
+  `docs/design/04_1a_denomination.md` §4.1. **Owed to 4.1c-proper.**
+- **It does not dispose of kill condition (d)**, whose level question
+  `docs/handoff/31_point_5_closing.md` §5.9 leaves open. **Owed to
+  4.1c-proper.**
+- **It sets no magnitude threshold** for the after-costs risk rule. **Owed to
+  4.1c-proper.**
+
+---
+
+**The threshold was committed alone, before the module existed. The derivation
+was run against it and the verdict applied as written: the trigger does not fire
+at 0.6020 of the firing level. One limitation of the instrument is recorded
+without revising it, and one structural fact — a constant multiplicative
+non-uniformity of about 55%, invariant to the parameter — is handed forward. No
+tolerance is selected, no width is recommended, and 4.1a is not reopened.**
