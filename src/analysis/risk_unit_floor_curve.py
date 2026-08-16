@@ -290,3 +290,189 @@ rule above rather than merely recording the numbers.
 THE STEP IS A RESOLUTION CHOICE AND IS NOT DERIVED. It is stated as chosen: it
 divides both bounds exactly and yields a grid dense enough to exhibit the curve.
 No property of the derivation depends on it."""
+
+
+# ---------------------------------------------------------------------------
+# PART B. THE CLOSED FORM. Derived here, inherited from nothing.
+# ---------------------------------------------------------------------------
+
+def direction_sign(direction):
+    """`sigma`: -1 long, +1 short. The stop is `entry * (1 + sigma * w)`."""
+    if direction == LONG:
+        return -1.0
+    if direction == SHORT:
+        return 1.0
+    raise ValueError("direction must be %r or %r, got %r" % (LONG, SHORT,
+                                                             direction))
+
+
+def form_constants(cfg, symbol, direction):
+    """`(A, f, h, sigma)` -- everything the closed form is built from.
+
+    `A` is the unvalidated total, `f` the taker rate, `h` the haircut rate --
+    THE ONLY UNVALIDATED RATE ATTACHED TO THE STOP PRICE, which is what makes the
+    direction question non-trivial.
+    """
+    a, f = rate_constants(cfg, symbol)
+    h = cfg.haircut_bps(symbol) / 10_000.0
+    return a, f, float(h), direction_sign(direction)
+
+
+def required_floor_fraction(tau, cfg, symbol, direction):
+    """THE SOLVED WIDTH. A CLOSED FORM, AND THE REASON THERE IS ONE IS STATED.
+
+    Normalising by the entry price, with `sigma` as above:
+
+        numerator   U = A + sigma * w * h
+        denominator d = A + 2f + w * (1 + sigma * (f + h))
+
+    THE SELF-REFERENCE RESOLVES BECAUSE BOTH SIDES ARE AFFINE IN THE WIDTH.
+    The risk unit contains the stop distance -- the quantity being solved for --
+    so the equation is genuinely self-referential. But the width enters the
+    numerator once, through the haircut on the stop price, and the denominator
+    once, through the move and the stop-attached rates. `U = tau * d` is therefore
+    a LINEAR equation in the width, and it has an exact solution:
+
+        w = [ A (1 - tau) - 2 f tau ] / [ tau (1 + sigma (f + h)) - sigma h ]
+
+    NO FIXED POINT AND NO ITERATION IS REQUIRED. That is a derived result, not an
+    assumption: it would fail the moment any unvalidated rate were charged on a
+    quantity that is not affine in the width.
+
+    Raises if the tolerance sits outside the cell's achievable range, rather than
+    returning a negative or infinite width that a caller might use.
+    """
+    tau = float(tau)
+    a, f, h, sigma = form_constants(cfg, symbol, direction)
+
+    # ADMISSIBILITY IS TESTED AGAINST THE STRUCTURAL BOUND, NOT AGAINST THE SIGN
+    # OF THE SOLVED WIDTH. At the ceiling the closed form's numerator is an exact
+    # zero that floating point leaves as residue of order 1e-20, so a sign check
+    # admits a width of order 1e-19 -- positive, and meaningless. Comparing the
+    # tolerance to the ceiling introduces no tuned constant: the ceiling is
+    # `A / (A + 2f)`, built from the same rates.
+    ceiling = limit_ratio_as_width_to_zero(cfg, symbol)
+    if tau >= ceiling:
+        raise ValueError(
+            "tolerance %r is at or above the zero-width limit %r for %s: the "
+            "constraint imposes no floor at any width" % (tau, ceiling, symbol))
+
+    denom = tau * (1.0 + sigma * (f + h)) - sigma * h
+    if denom == 0.0:
+        raise ValueError(
+            "tolerance %r sits exactly on the pole for %s %s" % (tau, symbol,
+                                                                 direction))
+    w = (a * (1.0 - tau) - 2.0 * f * tau) / denom
+    if not w > 0.0:
+        raise ValueError(
+            "no positive width at tolerance %r for %s %s: below the pole at %r "
+            "the ratio cannot be driven that low at any width"
+            % (tau, symbol, direction, pole(cfg, symbol, direction)))
+    return w
+
+
+def pole(cfg, symbol, direction):
+    """The tolerance at which the closed form's denominator vanishes, or None.
+
+    DERIVED, NOT INHERITED. Setting `tau (1 + sigma (f + h)) = sigma h`:
+
+        tau_pole = sigma * h / (1 + sigma * (f + h))
+
+    FOR A LONG THIS IS NEGATIVE and therefore not a tolerance: `sigma` is -1 and
+    the numerator is `-h`. There is no pole at any admissible tolerance.
+
+    FOR A SHORT IT IS POSITIVE, at `h / (1 + f + h)`. It is the ratio's asymptote
+    as the width grows without bound: a short's unvalidated sum GROWS with width,
+    because the haircut is charged on a stop price that moves away from entry, so
+    the ratio cannot be driven below that value at any width. A tolerance below it
+    is unreachable on a short by geometry alone.
+
+    Returns None when the pole is not at a positive tolerance.
+    """
+    _, f, h, sigma = form_constants(cfg, symbol, direction)
+    value = sigma * h / (1.0 + sigma * (f + h))
+    return float(value) if value > 0.0 else None
+
+
+def direction_split_present(cfg, symbol, taus=None, tolerance=1e-15):
+    """Do long and short require different widths? MEASURED OVER THE GRID.
+
+    THE NEGATIVE CONDITION, STATED SO IT COULD HAVE BEEN OBSERVED: no split arises
+    if and only if `sigma` drops out of both expressions, which needs BOTH
+    stop-attached rates to vanish -- the haircut AND the taker fee. The haircut
+    alone is not enough, because the stop-leg fee is also charged on a price that
+    moves with the width. A test exercises both cases, so a negative result here
+    would have been checkable rather than merely absent.
+    """
+    taus = TAU_GRID if taus is None else tuple(taus)
+    for tau in taus:
+        lo = required_floor_fraction(tau, cfg, symbol, LONG)
+        hi = required_floor_fraction(tau, cfg, symbol, SHORT)
+        if abs(hi - lo) > tolerance:
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# PART C. VERIFICATION AGAINST THE IMPLEMENTATION.
+# ---------------------------------------------------------------------------
+
+def solve_and_feed_back(tau, cfg, symbol, direction, entry_price=REFERENCE_PRICE):
+    """Solve, then recompute the ratio FROM THE ENGINE at the solved width.
+
+    THE CLOSED FORM IS NEVER TRUSTED TO CHECK ITSELF. The returned ratio is built
+    from `risk_unit` and `unvalidated_sum`, both of which reach the cost algebra
+    through `sizing.per_unit_denominator` and `portfolio.funding_per_unit`.
+    """
+    w = required_floor_fraction(tau, cfg, symbol, direction)
+    stop = stop_from_width(entry_price, w, direction)
+    d = risk_unit(entry_price, stop, direction, cfg, symbol)
+    u = unvalidated_sum(entry_price, stop, direction, cfg, symbol)
+    move = abs(float(entry_price) - stop)
+    validated = bare_denominator(entry_price, stop, direction, cfg,
+                                 symbol) - move
+    return {
+        "tau": float(tau), "symbol": symbol, "direction": direction,
+        "width": w, "width_pct": 100.0 * w,
+        "stop_price": stop, "move": move,
+        "risk_unit": d, "unvalidated": u, "validated": validated,
+        "ratio": u / d,
+        "exceeds_cap": bool(w > float(cfg.stop_max_pct)),
+    }
+
+
+def curve(cfg, taus=None, symbols=None, entry_price=REFERENCE_PRICE):
+    """Every cell of the committed grid, solved and fed back."""
+    taus = TAU_GRID if taus is None else tuple(taus)
+    symbols = tuple(rs.SYMBOLS) if symbols is None else tuple(symbols)
+    return [solve_and_feed_back(tau, cfg, symbol, direction, entry_price)
+            for tau in taus for symbol in symbols for direction in DIRECTIONS]
+
+
+def feedback_residual(rows):
+    """Largest failure of a solved width to reproduce the tolerance it solved."""
+    return float(max(abs(r["ratio"] - r["tau"]) for r in rows))
+
+
+def decomposition_residual(rows):
+    """Largest failure of move plus validated plus unvalidated to equal the unit."""
+    return float(max(abs((r["move"] + r["validated"] + r["unvalidated"])
+                         - r["risk_unit"]) for r in rows))
+
+
+def price_invariance(cfg, prices=(120.5, 3_000.0, 95_000.0), taus=None):
+    """Largest width difference across widely separated entry prices.
+
+    THE WIDTH IS A FRACTION AND MUST NOT DEPEND ON THE PRICE. Every rate in both
+    the numerator and the denominator is charged proportionally to a price, so the
+    price cancels -- and that is asserted rather than assumed.
+    """
+    taus = TAU_GRID if taus is None else tuple(taus)
+    worst = 0.0
+    for symbol in rs.SYMBOLS:
+        for direction in DIRECTIONS:
+            for tau in taus:
+                widths = [solve_and_feed_back(tau, cfg, symbol, direction, p)["width"]
+                          for p in prices]
+                worst = max(worst, max(widths) - min(widths))
+    return float(worst)
