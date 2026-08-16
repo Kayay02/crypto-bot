@@ -8,11 +8,12 @@ what it governs or measures.
 
 > ### ANY STEP CREATING A FROZEN ARTIFACT APPENDS ITS ENTRY IN THE SAME COMMIT.
 
-**UPDATING THIS FILE IS ONE OF THE TWO PRACTICES `docs/prompts/STANDING_RULES.md`
-§12.7 RECORDS AS UNCOMMITTED.** That section states the position honestly: the
-single-file rule these updates would be an exemption from is committed nowhere, so
-the exemption cannot be transcribed as standing. **The practice is followed; it is
-not claimed as a rule.**
+**UPDATING THIS FILE IS ONE OF THE TWO EXEMPTIONS TO THE SINGLE-FILE RULE**,
+committed at `docs/design/04_1d_standing_practices.md` §1.3. That document creates
+the rule rather than transcribing it, and says so; the exemptions are exemptions
+from a rule established there, not from one that pre-existed. **This paragraph
+previously recorded the practice as uncommitted, which was true until
+`docs/design/04_1d_standing_practices.md` was committed.**
 
 > ### THIS MANIFEST IS A CONVENIENCE INDEX. THE GIT HISTORY IS AUTHORITATIVE WHERE
 > ### THEY DISAGREE.
@@ -163,6 +164,17 @@ dominance obligation discharged as moot.
 uncertainty parameter and its scope, the stress comparator's reconciliation rule,
 and §7.3 the Point 6 queue at four.
 
+**`docs/design/04_1d_standing_practices.md`**
+`e4959d4cfc25489c2d016efbfe7c95e04ada360df8546f8bf907314c034e9f3b` — commit
+**introduced by the same commit as this manifest revision** — its hash cannot
+appear here, because a file recording its own commit's hash changes that hash. Every
+other entry was added in a later commit than the artifact it names, so the case had
+not arisen before; `git log --diff-filter=A` over the path is authoritative. §1
+commits four standing practices as rules, one of which — the
+single-file rule and its two exemptions at §1.3 — this document creates rather
+than transcribes; §2 records three as conventions; §4 logs **erratum entry 10**;
+§5 logs **ledger instance (44)**, taking the total to 44.
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -237,10 +249,18 @@ set probe.
 
 ---
 
-## 3. IMPLEMENTATION — ANALYSIS MODULES LATER STEPS BUILD ON
+## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
 
 **Source code is an implementation of the specification and is not a member of
 it**, per amendment 2 §2.
+
+**`src/firewall.py`**
+`529f7eaec40c1624d9af0b7eadee995719a341aa77630af6c5aa48df20b52809` — commit
+`47a26de`. **THE BANNED-NAME LIST, DEFINED ONCE.** Previously written out in
+eighteen test modules, four of which had drifted three names behind.
+`tests/test_firewall_names.py` asserts over the AST that no module defines its own
+copy. It sits at the top of `src/` because the firewall crosses every subpackage
+and is not a measurement.
 
 **`src/analysis/risk_unit_floor_curve.py`**
 `4a7b035e46860d24b9755439c209f148c939ff4e3443c29a47657f0a52640e18` — commit
@@ -304,15 +324,18 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 20.**
+- **Frozen specification entries listed: 21.**
 - **Evidence reports listed: 15.**
-- **Analysis modules listed: 8**, with 6 more present and omitted as unused by the
-  current chain.
+- **Implementation modules listed: 9** — `src/firewall.py` plus eight under
+  `src/analysis/`, with 6 more analysis modules present and omitted as unused by
+  the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 43.**
-- **Hash mismatches against values recorded in committed documents: zero, over 29
-  path-and-hash pairs.**
-- **Defect ledger: 43**, stated at `docs/design/04_1c_denominator_choice.md` §5.5.
-- **Errata index: 9 entries**, at `docs/design/04_1c_pre_commitments.md` §5.
-- **Test suite: 1247 passing.**
+- **Total hashed entries: 45.**
+- **Hash mismatches against values recorded in committed documents: zero.**
+- **Defect ledger: 44**, stated at `docs/design/04_1d_standing_practices.md` §5.3.
+- **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
+  and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**, which that
+  section records the index's next holder must carry forward, the index itself
+  being frozen and uneditable.
+- **Test suite: 1261 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
