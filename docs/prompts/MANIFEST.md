@@ -164,6 +164,14 @@ dominance obligation discharged as moot.
 uncertainty parameter and its scope, the stress comparator's reconciliation rule,
 and §7.3 the Point 6 queue at four.
 
+**`docs/design/04_1c_consequences_and_thresholds.md`**
+`07e6a74a34387a1c0f45f070b1046bc2d090361206ef6e380d6bbed17f44cb85` — **introduced by the same commit as this
+manifest revision**; `git log --diff-filter=A` over the path is authoritative.
+4.1c's close: §2 narrows reject-over-clip to population A and commits clipping for
+population B; §3 disposes of kill condition (d) as to stratum and level; §4 commits
+the magnitude threshold, ordered modality-then-magnitude; §5 the ledger at 46 and
+the errata index's true standing; §6 4.1c's closing position.
+
 **`docs/design/04_1d_standing_practices.md`**
 `e4959d4cfc25489c2d016efbfe7c95e04ada360df8546f8bf907314c034e9f3b` — commit
 **introduced by the same commit as this manifest revision** — its hash cannot
@@ -337,18 +345,20 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 21.**
+- **Frozen specification entries listed: 22.**
 - **Evidence reports listed: 16.**
 - **Implementation modules listed: 10** — `src/firewall.py` plus nine under
   `src/analysis/`, with 5 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 47.**
+- **Total hashed entries: 48.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 44**, stated at `docs/design/04_1d_standing_practices.md` §5.3.
+- **Defect ledger: 46**, stated at
+  `docs/design/04_1c_consequences_and_thresholds.md` §5.4.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
-  and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**, which that
-  section records the index's next holder must carry forward, the index itself
-  being frozen and uneditable.
+  and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
+  says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
+  §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
+  artifact.
 - **Test suite: 1280 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
