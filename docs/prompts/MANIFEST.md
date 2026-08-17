@@ -190,6 +190,12 @@ single-file rule and its two exemptions at §1.3 — this document creates rathe
 than transcribes; §2 records three as conventions; §4 logs **erratum entry 10**;
 §5 logs **ledger instance (44)**, taking the total to 44.
 
+**`docs/design/04_1f_cap_requirement.md`**
+`fe895646df98a9071446a5d86df5687c3251206ab2f976da9718e7ad3c3a6eb6` — **introduced by the same commit as this
+manifest revision**. What a stop cap must do, committed BEFORE any candidate is
+evaluated: two failed purposes dropped, removal kept live, four limbs each with
+its failure test, constants not excluded, and comparability barred as a ground.
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -363,13 +369,13 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 23.**
+- **Frozen specification entries listed: 24.**
 - **Evidence reports listed: 17.**
 - **Implementation modules listed: 11** — `src/firewall.py` plus ten under
   `src/analysis/`, with 4 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 51.**
+- **Total hashed entries: 52.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 47**, stated at `docs/design/04_1e_stop_cap.md` §6.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
