@@ -296,6 +296,14 @@ manifest revision**. Three candidate cap rules measured against
 selection: `grid.derived_cap` per fold, no cap at all, and the same rule over the
 whole in-sample window.
 
+**`docs/handoff/40_point_4_2_fold_audit.md`**
+`9d0866d6624b8ff666289b284c580e82a2335999e74dda514e494e27a256b4ac` — **introduced by the same commit as this
+manifest revision**. The fold schedule audited for 4.2: nine folds with disjoint
+contiguous test windows, adjacent train windows overlapping ~50 per cent, fifteen
+test-into-train cross-overlaps, and a reachability trace establishing that the
+frozen thesis fits nothing on train while the 4.3/4.4 selection procedure fits the
+ATR multiple on train and evaluates it on test.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
@@ -389,12 +397,12 @@ unmodified via `git status` rather than by hash.
 ## 5. STATUS AT THIS COMMIT
 
 - **Frozen specification entries listed: 25.**
-- **Evidence reports listed: 18.**
+- **Evidence reports listed: 19.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 55.**
+- **Total hashed entries: 56.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 48**, stated at `docs/design/04_1g_cap_adoption.md` §7.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
@@ -402,5 +410,5 @@ unmodified via `git status` rather than by hash.
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
   §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
-- **Test suite: 1311 passing.**
+- **Test suite: 1322 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
