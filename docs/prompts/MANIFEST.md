@@ -196,6 +196,13 @@ manifest revision**. What a stop cap must do, committed BEFORE any candidate is
 evaluated: two failed purposes dropped, removal kept live, four limbs each with
 its failure test, constants not excluded, and comparability barred as a ground.
 
+**`docs/design/04_1g_cap_adoption.md`**
+`337c6049431f06f653f981117914e84a862966b2f6e4e38a49a94e158003d0d0` — **introduced by the same commit as this
+manifest revision**. Adopts candidate B: **there is no stop cap.** The clipped
+fraction is zero and 04_1e's thesis gap is closed; the admitted domain's lower
+bound moves to 0.00359143 with the level still inside; no fold-dependence arises;
+two code changes named as owed; ledger 48.
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -381,15 +388,15 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 24.**
+- **Frozen specification entries listed: 25.**
 - **Evidence reports listed: 18.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 54.**
+- **Total hashed entries: 55.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 47**, stated at `docs/design/04_1e_stop_cap.md` §6.3.
+- **Defect ledger: 48**, stated at `docs/design/04_1g_cap_adoption.md` §7.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
   and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
