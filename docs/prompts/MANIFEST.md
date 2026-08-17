@@ -304,6 +304,13 @@ test-into-train cross-overlaps, and a reachability trace establishing that the
 frozen thesis fits nothing on train while the 4.3/4.4 selection procedure fits the
 ATR multiple on train and evaluates it on test.
 
+**`docs/handoff/41_point_4_2_artifact_audit.md`**
+`e13a9122941edc4e9c5597b550b563802220b5a5292fe1ceb5660809e764a768` — **introduced by the same commit as this
+manifest revision**. Adjudicates the committed sweep artifacts against criteria
+transcribed before any finding: **NO BREACH.** They carry outcome quantities,
+belong to a superseded thesis, all predate the 2026-08-11 freeze, and no chain
+reaches any Point 4 or Point 5 commitment. No file under `data/` was opened.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
@@ -397,12 +404,12 @@ unmodified via `git status` rather than by hash.
 ## 5. STATUS AT THIS COMMIT
 
 - **Frozen specification entries listed: 25.**
-- **Evidence reports listed: 19.**
+- **Evidence reports listed: 20.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 56.**
+- **Total hashed entries: 57.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 48**, stated at `docs/design/04_1g_cap_adoption.md` §7.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
@@ -410,5 +417,5 @@ unmodified via `git status` rather than by hash.
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
   §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
-- **Test suite: 1322 passing.**
+- **Test suite: 1341 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
