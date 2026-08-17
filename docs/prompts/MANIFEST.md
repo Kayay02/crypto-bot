@@ -282,12 +282,24 @@ constraint, the reachability purpose tested and found to run backwards, the
 committed `grid.derived_cap` rule evaluated against 0.035, and the clipped count
 across a committed range.
 
+**`docs/handoff/39_point_4_cap_candidates.md`**
+`fc3878bc3d26486a4230bce5b3f9e9c297a1d61a65963504305dee68fb6ca0d3` — **introduced by the same commit as this
+manifest revision**. Three candidate cap rules measured against
+`04_1f_cap_requirement.md`'s four limbs, with per-limb verdicts and no
+selection: `grid.derived_cap` per fold, no cap at all, and the same rule over the
+whole in-sample window.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
 
 **Source code is an implementation of the specification and is not a member of
 it**, per amendment 2 §2.
+
+**`src/analysis/cap_candidates.py`**
+`55458809d3dab0cf192f20727b27970dbd1df56e959494a5e69e7196e1819bc0` — **introduced by the same commit as this
+manifest revision**. Report 39's module; imports `grid.derived_cap` and report
+36's domain machinery rather than reimplementing either.
 
 **`src/analysis/stop_cap_audit.py`**
 `57160bbeac676dff639a23a45cac8a34bf6f843f45dd721affb6f46d910fb545` — **introduced by the same commit as this
@@ -370,12 +382,12 @@ unmodified via `git status` rather than by hash.
 ## 5. STATUS AT THIS COMMIT
 
 - **Frozen specification entries listed: 24.**
-- **Evidence reports listed: 17.**
-- **Implementation modules listed: 11** — `src/firewall.py` plus ten under
-  `src/analysis/`, with 4 more analysis modules present and omitted as unused by
+- **Evidence reports listed: 18.**
+- **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
+  `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 52.**
+- **Total hashed entries: 54.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 47**, stated at `docs/design/04_1e_stop_cap.md` §6.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
@@ -383,5 +395,5 @@ unmodified via `git status` rather than by hash.
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
   §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
-- **Test suite: 1296 passing.**
+- **Test suite: 1311 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
