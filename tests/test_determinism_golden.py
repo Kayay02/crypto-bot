@@ -3,6 +3,43 @@
 Both use one frozen slice (BTCUSDT, January 2023, default parameters). Neither
 asserts anything about performance -- only that the SAME inputs keep producing
 the SAME rows.
+
+    THIS MODULE READS AN OUTCOME-BEARING ARTIFACT ON EVERY SUITE INVOCATION AND
+    IS PERMITTED TO DO SO ONLY BY A RECORDED CARVE-OUT.
+
+THE CARVE-OUT IS `docs/design/04_2a_artifact_containment.md` SECTION 4.2, and its
+four conditions are transcribed here and in `tests/golden/CONTAINMENT.md` because
+section 4.4 requires them recorded where a developer touching these fixtures will
+see them. They are asserted by `tests/test_containment_guard.py`.
+
+    THE TWO GOLDEN FILES AND THE PINNED-TRADE REGRESSION MAY READ OUTCOME-NAMED
+    VALUES, PERMITTED ONLY UNDER FOUR CONDITIONS.
+
+    (a) DETERMINISM AND SINGLE-POSITION IDENTITY ONLY. They may assert that
+        identical inputs produce identical outputs, and that one hand-derived
+        arithmetic identity holds on one named position. They may not compare
+        populations, compare two configurations, or aggregate over rows.
+    (b) EVERY EXPECTED VALUE IS HAND-DERIVED AND ITS DERIVATION IS WRITTEN DOWN.
+        A value copied from a run is not permitted, because a fixture that
+        records what the system did is a measurement wearing a fixture's name.
+    (c) EXACTLY THESE ARTIFACTS AND EXACTLY THESE READERS. The two files under
+        `tests/golden/`, and this module and
+        `tests/test_regression_pinned_trade.py`. No further fixture and no
+        further reader joins without amending that document.
+    (d) THE BLANKET NAME BAN OTHERWISE INTACT. The twelve-name guard is not
+        relaxed for these files, for these tests, or for anything else.
+
+WHAT VOIDS IT, section 4.3: using a fixture to compare two configurations;
+adding a second pinned trade; regenerating a golden file and taking expected
+values from the run rather than re-deriving them; and any assertion over an
+aggregate of the rows -- a sum, a mean, a count conditioned on an outcome column.
+
+    THE FIRST AND THE LAST ARE THE ONES THAT WOULD LOOK INNOCENT AT THE TIME,
+    AND THEY ARE NAMED FOR THAT REASON.
+
+HOW THIS MODULE STAYS INSIDE (a). It compares an output HASH, the column list and
+the row count. No value in any row is inspected, so there is nothing here for an
+aggregate to be taken over.
 """
 
 import hashlib

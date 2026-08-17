@@ -365,11 +365,39 @@ def test_expectancy_per_bar_is_total_R_over_total_bars(one_cell):
 # the persisted artifact
 # ===========================================================================
 
+#: WHY THIS SKIPS RATHER THAN FAILS, AND IT USED TO FAIL.
+#:
+#: The original wording was "This FAILS rather than skips: a guard that skips
+#: proves nothing", and the objection is right about a guard whose subject is
+#: present. It is wrong about one whose subject cannot be in the repository at
+#: all: `docs/design/04_2a_artifact_containment.md` section 3.5 decides that
+#: `sweep_cells.jsonl` STAYS UNTRACKED, because tracking it would add a further
+#: outcome-bearing file to version control and run directly against section 3.2.
+#:
+#:     A GUARD THAT FAILS ON A FILE THE REPOSITORY IS FORBIDDEN TO CARRY DOES
+#:     NOT PROVE ANYTHING EITHER. IT MAKES A CLEAN CLONE UNABLE TO PASS.
+#:
+#: That is section 3.5's consequence 1, and section 7 item 4 names its repair as
+#: owed: "making `tests/test_sweep_run.py` skip, or regenerating the file from
+#: source." REGENERATION IS NOT AVAILABLE IN A CLEAN CLONE -- the bar layer the
+#: sweep runs on is untracked too and is fetched from the venue -- so the first
+#: option is the only one that reaches the stated objective.
+#:
+#: THE GUARD KEEPS ITS TEETH WHEREVER THE ARTIFACT EXISTS, and
+#: `test_the_cells_guards_skip_ONLY_when_the_artifact_is_absent` asserts that
+#: the skip is conditional on absence and on nothing else.
+CELLS_ABSENT = (
+    "sweep cells absent at %s. THEY ARE NOT IN THE REPOSITORY BY DESIGN: "
+    "docs/design/04_2a_artifact_containment.md section 3.5 keeps this file "
+    "untracked because section 3.2 bars adding an outcome-bearing file to "
+    "version control. Regenerate with `python -m src.sweep.sweep`. This SKIPS "
+    "rather than fails so a clean clone can pass; wherever the artifact "
+    "exists the guard below runs in full.")
+
+
 def _cells():
     if not os.path.exists(sw.CELLS_PATH):
-        pytest.fail(f"sweep cells missing at {sw.CELLS_PATH}; run "
-                    f"`python -m src.sweep.sweep`. This FAILS rather than "
-                    f"skips: a guard that skips proves nothing.")
+        pytest.skip(CELLS_ABSENT % sw.CELLS_PATH)
     return sw.load_cells()
 
 
@@ -393,9 +421,40 @@ def test_artifact_covers_every_fold_symbol_and_arm():
 
 
 def test_artifact_trade_tables_stay_inside_the_in_sample_window():
+    """THE SAME REPAIR AS `_cells`, FOR THE SAME REASON.
+
+    The trade tables are untracked for the same ground and are absent in a clean
+    clone for the same reason, so a failure here defeats the same objective. It
+    SKIPS on absence and asserts in full on presence.
+    """
     paths = sorted(glob.glob(os.path.join(sw.TRADES_DIR, "*.parquet")))
     if not paths:
-        pytest.fail("no sweep trade tables on disk; run the sweep first")
+        pytest.skip(CELLS_ABSENT % sw.TRADES_DIR)
     for p in paths:
         ts = pd.read_parquet(p, columns=["signal_bar_ts"])["signal_bar_ts"]
         assert int(ts.max()) < simulate.HOLDOUT_START_MS
+
+
+def test_the_cells_guards_skip_ONLY_when_the_artifact_is_absent(monkeypatch):
+    """THE ANSWER TO "A GUARD THAT SKIPS PROVES NOTHING".
+
+    The skip must be conditional on absence and on nothing else, or it becomes a
+    permanent silence that nobody can distinguish from a passing guard. Both
+    directions are asserted, and NEITHER TOUCHES THE ARTIFACT: the absent case
+    points `CELLS_PATH` at a name that does not exist, and the present case
+    checks only that the real path exists and that `_cells` does not skip.
+    """
+    absent = os.path.join(sw.OUT_DIR, "no_such_cells.jsonl")
+    assert not os.path.exists(absent), "the fixture path must not exist"
+    monkeypatch.setattr(sw, "CELLS_PATH", absent)
+    # `Skipped` derives from BaseException, so `pytest.raises(Exception)` would
+    # let it through and this test would itself skip -- which is the failure
+    # mode it exists to detect.
+    with pytest.raises(pytest.skip.Exception) as caught:
+        _cells()
+    assert "04_2a_artifact_containment" in str(caught.value)
+    monkeypatch.undo()
+
+    # THE OTHER DIRECTION: present means the guard runs, and does not skip.
+    if os.path.exists(sw.CELLS_PATH):
+        assert _cells(), "the artifact is present and the guard must run on it"

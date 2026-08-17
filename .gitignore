@@ -42,6 +42,13 @@ __pycache__/
 # JSONL (~7k records) and the trade tables stay ignored -- both are
 # reproducible from this hash and are far too large to track.
 !/data/derived/sweep/sweep.json
+# CONTAINMENT.md is the directory marker
+# docs/design/04_2a_artifact_containment.md §3.4 commits: what the files are,
+# which thesis they belong to, that they carry or may carry outcome quantities,
+# and that §3.2 prohibits opening them. A marker a step meets before the file
+# beats a rule it must remember -- so it has to be IN the clone, which means it
+# has to be tracked. It is prose written by this project and carries no data.
+!/data/derived/sweep/CONTAINMENT.md
 # bands.json is the step 3 deliverable: the K.2 acceptance verdict for every
 # grid point, the per-fold bands, the plateau selections and the kill-condition
 # verdicts. Step 4 is forbidden from revisiting step 3, so a committed copy
@@ -56,6 +63,8 @@ __pycache__/
 !/data/derived/analysis/
 /data/derived/analysis/*
 !/data/derived/analysis/e6_dispersion.json
+# The same directory marker, for the same reason. §3.4.
+!/data/derived/analysis/CONTAINMENT.md
 # bitget_fees.json is a PROVENANCE artifact: a fee rate nobody can date is a
 # rate the admissibility line cannot be defended against. The commit is what
 # proves which schedule, retrieved when and from where, report 17's envelope

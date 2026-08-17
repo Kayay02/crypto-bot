@@ -472,7 +472,7 @@ unmodified via `git status` rather than by hash.
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
   §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
-- **Test suite: 1358 passing.**
+- **Test suite: 1378 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
 
 ### 5.1 THE HOLDOUT-BOUNDARY EXCLUSION, RECORDED HERE BECAUSE IT MOVED A FIGURE
@@ -497,3 +497,82 @@ evaluated to obtain it.
 
 **WHETHER REPORT 26 IS RE-MEASURED OR AN ERRATUM IS LOGGED IS NOT SETTLED BY ANY
 COMMITTED DOCUMENT AND IS NOT DECIDED HERE.**
+
+### 5.2 THE MECHANICAL DEBT AT `docs/design/04_2a_artifact_containment.md` §7
+
+**FOUR OF THE FIVE ITEMS `docs/design/04_2b_point_4_decomposition.md` §5.1
+DIRECTS TO THE CONSOLIDATED CODE STEP ARE CLEARED.** They bear on freeze
+preconditions 4, 5 and 6 at `docs/design/04_2b_point_4_decomposition.md` §4.3.
+
+- **§7 item 1 — the directory markers (§3.4).** `CONTAINMENT.md` in
+  `data/derived/sweep/`, `data/derived/analysis/`, `reports/` and
+  `tests/golden/`. The two under `data/` are unignored so a clone carries them.
+- **§7 item 2 — the tree-wide read guard (§3.6).**
+  `tests/test_containment_guard.py`, over every `.py` file under `src/` and
+  `tests/`, detecting over AST nodes and asserting against §3.3's closed set
+  rather than a count.
+- **§7 item 3 — the carve-out's recording in source (§4.4).** §4.2's four
+  conditions and §4.3's four voiding cases are written into
+  `tests/test_regression_pinned_trade.py`, `tests/test_determinism_golden.py`
+  and `tests/golden/CONTAINMENT.md`, and asserted by the guard.
+- **§7 item 4 — `sweep_cells.jsonl`'s reproducibility (§3.5).**
+  `tests/test_sweep_run.py` now SKIPS on absence instead of failing, which is
+  the first of the two repairs §3.5 names. The file is neither tracked nor
+  deleted.
+
+> ### **§7 ITEM 6 — THE `simulate.py` CAP DIVERGENCE — IS NOT CLEARED AND HAS NO
+> ### OWNER.** `docs/design/04_2b_point_4_decomposition.md` §5.1 directs it to
+> ### the same consolidated step. **Freeze precondition 3 is therefore closed as
+> ### to the seal-crossing exclusion and OPEN as to the cap.**
+
+**A FINDING THE GUARD PRODUCED, RECORDED AND NOT DECIDED.**
+`docs/handoff/41_point_4_2_artifact_audit.md` §4.1 records that `bands.json` has
+**no reader**, and `docs/design/04_2a_artifact_containment.md` §3.3 builds its
+closed set of **three** test modules on that enumeration.
+**`tests/test_sweep_bands.py` reads `bands.json` on every suite invocation.** It
+is pinned separately by the guard rather than added to the closed set, since
+§3.3 requires an amendment for that. **§7 item 5 covers four modules, not
+three.**
+
+### 5.3 THE CLEAN-CLONE PROPERTY, TESTED RATHER THAN ASSERTED
+
+**`docs/design/04_2b_point_4_decomposition.md` §5.1 STATES THE OBJECTIVE: "A
+CLEAN CLONE BUILDS AND THE SUITE PASSES." IT IS NOT MET, AND THE BINDING
+CONSTRAINT IS NOT THE ONE §3.5 NAMES.** Three runs, on a clone of this commit at
+a fresh path:
+
+1. **CLONE ALONE, dependencies installed: 1,133 passed, 70 failed, 99 errors.**
+   Every one of them is the absent market-data layer. **`data/` is 985 MB and is
+   untracked by design**, sourced from the venue's API and rebuilt by
+   `src/data/build_derived.py` from an immutable raw layer that is also
+   untracked. **A clone cannot build it without re-fetching the history.**
+2. **CLONE WITH THE FULL DATA LAYER: 1,377 passed, 1 failed.**
+3. **CLONE WITH THE DATA LAYER BUT WITHOUT THE SWEEP'S UNTRACKED RUN OUTPUTS —
+   the state a build actually produces: 1,362 passed, 3 skipped, 2 failed, 11
+   errors.** **`tests/test_sweep_run.py` is fully repaired: three skips, no
+   failure and no error.** Every remaining failure and error is
+   `tests/test_sweep_bands.py`.
+
+> ### **`sweep_cells.jsonl` WAS NEVER THE BINDING CONSTRAINT.** §3.5's
+> ### consequence 1 attributes non-reproducibility to that one file. **The bar
+> ### layer is a far larger one, and `tests/test_sweep_bands.py` is a second.**
+
+**A THIRD DEFECT OF THE SAME CLASS, ESTABLISHED FROM SOURCE WITHOUT OPENING ANY
+ARTIFACT.** `src/sweep/bands.py:708` records `sw.CELLS_PATH` — an **absolute**
+path — into its payload, and `:840` renders
+`os.path.relpath(p['cells_path'], sch.ROOT)`.
+
+> ### THE RENDERED VALUE THEREFORE EQUALS THE COMMITTED REPORT'S **ONLY WHEN THE
+> ### REPOSITORY SITS AT THE ABSOLUTE PATH IT SAT AT WHEN THE ARTIFACT WAS
+> ### WRITTEN.** `tests/test_sweep_bands.py::test_the_committed_report_matches_a_
+> ### render_of_the_committed_artifact` **fails in any clone anywhere else**, and
+> ### skipping cannot repair it because it fails with the artifacts PRESENT.
+
+**NONE OF THE THREE IS REPAIRED HERE.** `tests/test_sweep_bands.py` is outside
+this step's four items, outside §3.3's closed set, and each available repair —
+changing what a dead-apparatus module writes, regenerating a tracked
+outcome-bearing artifact, or weakening the pin — is a decision no committed
+document settles.
+
+**AND `requirements.txt` DOES NOT LIST THE TEST RUNNER**, so "build, then run the
+suite" needs a step the file does not record. Noted, not changed.
