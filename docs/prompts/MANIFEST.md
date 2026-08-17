@@ -27,10 +27,21 @@ about the file. **Recompute rather than trust.**
 was copied from any document.
 
 **THE CROSS-CHECK, AND ITS RESULT.** Every 64-character hexadecimal string
-appearing in any document under `docs/` alongside a file path was extracted and
-compared against that file's current hash: **29 path-and-hash pairs found, 29
-matching, zero mismatches, and no named file absent.** No silent-edit event is
-detected at this commit.
+appearing in any document under `docs/` other than this manifest was extracted and
+compared against the working tree: **41 occurrences, of which 30 resolve to a file
+in the tree and match it exactly, and 11 are not file hashes at all** — four
+payload digests in `docs/design/06_exit_resolution_spec.md`, six in
+`docs/handoff/25_point_5_2_venue_constraints.md`, and one manifest-at-entry
+citation in `docs/design/04_2c_run_structure.md` which this revision supersedes.
+
+> ### **ZERO MISMATCHES: NO STRING THAT NAMES A FILE FAILS TO MATCH IT, AND NO
+> ### NAMED FILE IS ABSENT.** No silent-edit event is detected at this commit.
+
+**THE PRIOR REVISION RECORDED "29 PATH-AND-HASH PAIRS FOUND, 29 MATCHING".** The
+figure above is 30 under a stated and reproducible extraction rule; the earlier one
+did not state its rule, so the two are not comparable and the difference is not
+evidence of a change to any file. **The rule is stated here so the next revision
+can reproduce the number rather than re-derive it.**
 
 ---
 
@@ -218,6 +229,16 @@ their label drift recorded, 4.2 to 4.7 PRE-REGISTERED with deliverables, the §9
 mapping verified and §9(g) corrected from sub-point to completeness obligation,
 the freeze defined with six preconditions, and the open-items register placing all
 nine closing-record items -- four of which had never been cited. Ledger 50.
+
+**`docs/design/04_2c_run_structure.md`**
+`f352831af3a28d184e57d8e5ae90862ead8864d88d1f9196a4d8e4a77f5d722a` — **introduced by the same commit as this
+manifest revision**. Sub-point 4.2c. Commits ONE CONTINUOUS RUN over the whole
+in-sample window, budget carried across every fold boundary, positions assigned to
+a period by entry-bar close; commits the evaluation population as a rule with the
+test-window restriction refused and a seal-crossing exclusion committed; makes a
+fold period a date partition of one run's output. §5.6 disposed as to run
+structure with three residues named. Ledger unchanged at 50. Commits no aggregation
+rule, comparison rule, metric or level.
 
 ---
 
@@ -419,16 +440,17 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 27.**
+- **Frozen specification entries listed: 28.**
 - **Evidence reports listed: 20.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 59.**
+- **Total hashed entries: 60.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 50**, stated at
-  `docs/design/04_2b_point_4_decomposition.md` §7.3.
+  `docs/design/04_2b_point_4_decomposition.md` §7.3 and left unchanged by
+  `docs/design/04_2c_run_structure.md` §7.1.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
   and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
