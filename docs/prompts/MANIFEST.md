@@ -28,20 +28,22 @@ was copied from any document.
 
 **THE CROSS-CHECK, AND ITS RESULT.** Every 64-character hexadecimal string
 appearing in any document under `docs/` other than this manifest was extracted and
-compared against the working tree: **41 occurrences, of which 30 resolve to a file
-in the tree and match it exactly, and 11 are not file hashes at all** — four
+compared against the working tree: **42 occurrences, of which 30 resolve to a file
+in the tree and match it exactly, and 12 are not file hashes at all** — four
 payload digests in `docs/design/06_exit_resolution_spec.md`, six in
-`docs/handoff/25_point_5_2_venue_constraints.md`, and one manifest-at-entry
-citation in `docs/design/04_2c_run_structure.md` which this revision supersedes.
+`docs/handoff/25_point_5_2_venue_constraints.md`, and two manifest-at-entry
+citations, in `docs/design/04_2c_run_structure.md` and
+`docs/design/04_2d_aggregation.md`, each superseded by a later revision of this
+file.
 
 > ### **ZERO MISMATCHES: NO STRING THAT NAMES A FILE FAILS TO MATCH IT, AND NO
 > ### NAMED FILE IS ABSENT.** No silent-edit event is detected at this commit.
 
-**THE PRIOR REVISION RECORDED "29 PATH-AND-HASH PAIRS FOUND, 29 MATCHING".** The
-figure above is 30 under a stated and reproducible extraction rule; the earlier one
-did not state its rule, so the two are not comparable and the difference is not
-evidence of a change to any file. **The rule is stated here so the next revision
-can reproduce the number rather than re-derive it.**
+**THE MATCHING FIGURE IS UNCHANGED FROM THE PRIOR REVISION'S 30**, computed under
+the same stated rule; the occurrence count rises by one because each document that
+records the manifest hash it verified on entry adds an orphan the moment this file
+is next revised. **That is expected and is not a defect** — the citation is a
+record of what was verified then, not a claim about the file now.
 
 ---
 
@@ -239,6 +241,18 @@ test-window restriction refused and a seal-crossing exclusion committed; makes a
 fold period a date partition of one run's output. §5.6 disposed as to run
 structure with three residues named. Ledger unchanged at 50. Commits no aggregation
 rule, comparison rule, metric or level.
+
+**`docs/design/04_2d_aggregation.md`**
+`0b4e7a5d4a35d6602fdb3c5a84f43f559b0bfa39516bfdb921417ff636e99126` — **introduced by the same commit as this
+manifest revision**. Sub-point 4.2d. Commits the inversion -- under one continuous
+run the run-level quantity is primary and a per-period figure is a decomposition of
+it, so no weighting scheme across periods is admissible and an arithmetic
+disagreement is a defect. The partition is the nine test windows plus the
+unassigned row; train windows are inert; the overlap facts are retired. Every
+per-period figure carries its denominator. No inferential procedure treating
+periods as independent observations is admissible. M.3's second limb adopted afresh
+per partition cell per symbol, with zero-valued cells reported. Ledger 51. Commits
+no metric and no level.
 
 ---
 
@@ -440,17 +454,15 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 28.**
+- **Frozen specification entries listed: 29.**
 - **Evidence reports listed: 20.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 60.**
+- **Total hashed entries: 61.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 50**, stated at
-  `docs/design/04_2b_point_4_decomposition.md` §7.3 and left unchanged by
-  `docs/design/04_2c_run_structure.md` §7.1.
+- **Defect ledger: 51**, stated at `docs/design/04_2d_aggregation.md` §9.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
   and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
