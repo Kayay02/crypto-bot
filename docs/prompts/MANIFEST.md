@@ -203,6 +203,14 @@ fraction is zero and 04_1e's thesis gap is closed; the admitted domain's lower
 bound moves to 0.00359143 with the level still inside; no fold-dependence arises;
 two code changes named as owed; ledger 48.
 
+**`docs/design/04_2a_artifact_containment.md`**
+`ddd8938612f0086dc63d35fffbf1536114ef60e4a383cf64f084a1274638d3f6` — **introduced by the same commit as this
+manifest revision**. Declares `src/sweep/` dead relative to the frozen thesis on
+one ground -- both the import and file-read channels closed -- and commits
+containment for the outcome-bearing artifacts, a four-condition fixture carve-out,
+the human-channel testimony, and ledger instance (49). Commits no aggregation
+rule.
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -403,15 +411,16 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 25.**
+- **Frozen specification entries listed: 26.**
 - **Evidence reports listed: 20.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 57.**
+- **Total hashed entries: 58.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 48**, stated at `docs/design/04_1g_cap_adoption.md` §7.3.
+- **Defect ledger: 49**, stated at
+  `docs/design/04_2a_artifact_containment.md` §6.4.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
   and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
