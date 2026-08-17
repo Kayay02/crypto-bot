@@ -24,15 +24,37 @@ one. **Nothing below instructs anybody to build anything.**
 
 ### 0.1 THE PERMITTED BANNED-TOKEN OCCURRENCES
 
-**THIS FILE NAMES THE FIREWALL'S BANNED TOKENS**, in §7.2, once, because a
-briefing whose purpose includes keeping a new reader from tripping the firewall
-cannot omit what trips it. **That is the only place they occur**, and the
-canonical list is `src/firewall.py`, from which membership should be taken.
-
-**A CHECK FINDING THOSE TOKENS IN §7.2 HAS FOUND THE LIST, NOT A VIOLATION.**
+**THIS FILE CONTAINS THE FIREWALL'S BANNED TOKENS**, which is unavoidable in a
+file whose purpose includes keeping a new reader from tripping the firewall.
 `docs/design/04_1d_standing_practices.md` §0.1 took the narrower route of naming
-the sources without reproducing either; this file takes the wider one and says so,
-for the reason above.
+its sources without reproducing either; **this file takes the wider one and says
+so.** The canonical list is `src/firewall.py`, from which membership should be
+taken.
+
+**THEY OCCUR IN SIX PLACES, EACH SEPARATELY REQUIRED BY WHAT THIS FILE MUST
+CARRY:**
+
+- **§4**, stating the figure that killed the FIRST Point 4 hypothesis, which is
+  the substance of that verdict;
+- **§5.5**, quoting kill conditions (a), (b), (c) and (f) in the frozen thesis's
+  own words;
+- **§6.1 and §12.2**, transcribing the standing brief's drawdown-tolerance
+  premise, from which the aggregate budget is derived;
+- **§7.1**, quoting `docs/handoff/31_point_5_closing.md` §11's prose statement of
+  what the firewall forbids;
+- **§7.2**, listing the enforced twelve-name set and the three names the retired
+  nine-name variant omitted, without which the divergence is not statable;
+- **§8.1**, stating the premise the tolerance's original justification rested on.
+
+> **A CHECK FINDING THOSE TOKENS IN THOSE SIX PLACES HAS FOUND THE LIST, THE
+> QUOTED RULES AND THE PREMISES — NOT A VIOLATION. NO OTHER OCCURRENCE IN THIS
+> FILE IS PERMITTED.**
+
+**AND THE DISTINCTION THAT MAKES THIS ADMISSIBLE AT ALL: the firewall forbids such
+a figure EXISTING FOR THIS THESIS.** §4's figure belongs to **the killed
+momentum/breakout hypothesis**, is already published in committed reports, and is
+not a quantity for the thesis at §5. **Every other occurrence above is a name, a
+frozen rule's own wording, or a premise — none is a figure.**
 
 ---
 
