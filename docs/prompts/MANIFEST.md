@@ -262,12 +262,23 @@ Sub-point 4.1c step 2: the level and its epistemic status, the floor widths, the
 stress comparator with the worst cell named, the stratum over the 11,384
 candidates, and the FIRST COUNT of the ATR-above-cap rejection population.
 
+**`docs/handoff/38_point_4_stop_cap_audit.md`**
+`529b3a28c88bf2197fa3e20511abe1257e572a6dac92f7876e603e8d21bf4df9` — **introduced by the same commit as this
+manifest revision**. The frozen stop cap audited: every read site, the granularity
+constraint, the reachability purpose tested and found to run backwards, the
+committed `grid.derived_cap` rule evaluated against 0.035, and the clipped count
+across a committed range.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
 
 **Source code is an implementation of the specification and is not a member of
 it**, per amendment 2 §2.
+
+**`src/analysis/stop_cap_audit.py`**
+`57160bbeac676dff639a23a45cac8a34bf6f843f45dd721affb6f46d910fb545` — **introduced by the same commit as this
+manifest revision**; range committed alone first at `0a1ae11`. Report 38's module.
 
 **`src/analysis/level_consequences.py`**
 `f558673aadddf1df27816c050d4445332302108571d384a4e01cf0764bfc789a` — **introduced by the same commit as this
@@ -346,12 +357,12 @@ unmodified via `git status` rather than by hash.
 ## 5. STATUS AT THIS COMMIT
 
 - **Frozen specification entries listed: 22.**
-- **Evidence reports listed: 16.**
-- **Implementation modules listed: 10** — `src/firewall.py` plus nine under
-  `src/analysis/`, with 5 more analysis modules present and omitted as unused by
+- **Evidence reports listed: 17.**
+- **Implementation modules listed: 11** — `src/firewall.py` plus ten under
+  `src/analysis/`, with 4 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 48.**
+- **Total hashed entries: 50.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 46**, stated at
   `docs/design/04_1c_consequences_and_thresholds.md` §5.4.
@@ -360,5 +371,5 @@ unmodified via `git status` rather than by hash.
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
   §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
-- **Test suite: 1280 passing.**
+- **Test suite: 1296 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**

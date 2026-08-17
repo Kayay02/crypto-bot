@@ -38,8 +38,8 @@ CARRY:**
   the substance of that verdict;
 - **§5.5**, quoting kill conditions (a), (b), (c) and (f) in the frozen thesis's
   own words;
-- **§6.1 and §12.2**, transcribing the standing brief's drawdown-tolerance
-  premise, from which the aggregate budget is derived;
+- **§6.1 and §12.2**, transcribing the standing brief's peak-to-trough
+  loss-tolerance premise, from which the aggregate budget is derived;
 - **§7.1**, quoting `docs/handoff/31_point_5_closing.md` §11's prose statement of
   what the firewall forbids;
 - **§7.2**, listing the enforced twelve-name set and the three names the retired
@@ -208,9 +208,9 @@ MEMBER OF IT.**
 ### 3.3 THE ARTIFACT INDEX
 
 `docs/prompts/MANIFEST.md` carries one entry per artifact — path, SHA-256,
-introducing commit, and one line on what it governs. **At its last revision: 21
+introducing commit, and one line on what it governs. **At its last revision: 22
 frozen specification entries, 16 evidence reports, 10 implementation modules, 4
-unhashed engine dependencies, 47 total hashed entries, and zero hash mismatches
+unhashed engine dependencies, 48 total hashed entries, and zero hash mismatches
 against values recorded in committed documents.** Its §0.1 records the cross-check
 that produced that: every 64-character hexadecimal string appearing alongside a
 file path anywhere under `docs/` was extracted and compared against the file's
@@ -444,7 +444,8 @@ amendments 1 and 2.
 and its amendment 1, `04_1b_tolerance_and_branch.md`,
 `04_1c_non_uniformity_check.md`, `04_1c_path_and_scope.md`,
 `04_1c_denominator_choice.md`, `04_1c_pre_commitments.md`,
-`04_1c_level_method.md`, `04_1c_proper.md`, `04_1d_standing_practices.md`.
+`04_1c_level_method.md`, `04_1c_proper.md`, `04_1d_standing_practices.md`,
+`04_1c_consequences_and_thresholds.md`.
 
 **A KNOWN HOLE IN THE MEMBERSHIP CRITERION, LOGGED AND OPEN.**
 `docs/design/04_0_decision_rule.md` §9(i) records that the criterion admits future
@@ -597,6 +598,10 @@ separation is the entire defence and it is checkable from `git log`.**
 - **`c6b71c5`, `47a26de`, `fc8933f` — the standing rules, the firewall
   consolidation, and the standing practices.**
 - **`eebe986` — report 37, step 2. THE LEVEL.**
+- **`2a04e37` — step 3, `04_1c_consequences_and_thresholds.md`. THE CLOSE.** The
+  rejection rule narrowed, kill condition (d) disposed of, the magnitude threshold
+  committed, two ledger instances logged. **Sub-point 4.1c and sub-point 4.1 are
+  both CLOSED.** §8.5.
 
 ### 8.3 THE CALIBRATION, AND ITS HONESTY
 
@@ -673,21 +678,159 @@ available to someone who had chosen the number first.**
   the level entirely.** It is **disjoint** from the floor-bound set, necessarily,
   because population A is empty.
 
-### 8.5 WHAT IS OWED NEXT
+### 8.5 STEP 3, WHICH CLOSED 4.1c
 
-**STEP 3, A DESIGN DOCUMENT, STILL UNWRITTEN.** It owes three things:
+**`docs/design/04_1c_consequences_and_thresholds.md`, commit `2a04e37`.** It
+decided three things.
 
-1. **Kill condition (d)'s disposition** — including whether it is evaluated per
-   fold under the majority rule, where it is undetectable in exactly the folds
-   most likely to bite, or pooled. **The choice must be stated before any figure
-   exists.**
-2. **The magnitude threshold**: at what magnitude does a breach of the
-   after-costs risk rule stop being tolerable? **This is owed because two
-   committed decisions currently run in opposite directions on the same
-   principle** — §11.2.
-3. **The Point 6 audit's terms.**
+**FIRST — THE REJECTION RULE, NARROWED.**
 
-**AND BEYOND 4.1c, THE VALIDATION DESIGN ITSELF IS STILL OWED IN FULL.** §9.
+> **REJECT APPLIES TO POPULATION A ALONE. POPULATION B — the raw ATR-derived stop
+> above the cap — IS CLIPPED TO THE CAP**, which is what
+> `costs.stop_geometry` already does. The decision changes no implementation; it
+> narrows a rule that had been committed over a population its own argument did
+> not reach.
+
+**The ground is the cost ground alone.** Reject-over-clip was argued from cost
+protection: a clipped position carries a stop narrower than the constraint
+requires, so a larger unvalidated share than the tolerance permits. **That reaches
+population A exactly and has no purchase on B**, because a B position clipped to
+the cap carries a stop **at** the cap, and **the cap exceeds every required floor
+by between 3.31 and 5.86 times** — smallest at SOLUSDT short, largest at BTCUSDT
+and ETHUSDT long. Its unvalidated share therefore sits far below the tolerance.
+
+**The mechanism is stated in the right direction, which matters:** clipping makes
+the stop **NARROWER** than the bar's volatility implies, not wider, **and
+narrowing is the direction the cost argument worries about. The case is safe
+because the cap still far exceeds the floor, not because clipping helps.** If the
+cap were ever lowered toward the floors, or the floors raised toward the cap, the
+decision would have to be remade.
+
+**The admissible population is unchanged at 11,384**, because population A counts
+zero — **recorded as a consequence after the argument and expressly not a reason
+for it.**
+
+**SECOND — KILL CONDITION (d), DISPOSED OF.**
+
+**(d) named a floor that no longer exists**; the 1.50% constant is retired and the
+governing floor is per symbol and per direction. **That is a supersession, not an
+erratum** — the thesis was correct when written — but the stratifying predicate
+was not executable as written.
+
+> **STRATUM: the non-floor-bound stratum under the COMMITTED per-symbol,
+> per-direction floor.** The predicate is unchanged in kind — did the cost floor,
+> rather than the volatility, set the stop? — and only the floor it refers to has
+> moved.
+
+> **LEVEL: POOLED over the whole evaluation window. The per-fold decomposition is
+> reported as a stability probe and is NOT aggregated by majority for this
+> condition.**
+
+**The first reason does not depend on stratum thinness at all:** the fold
+schedule's own docstring states that the nine folds are **a stability probe, not
+nine independent trials, and that if they are ever counted as trials the
+arithmetic is wrong.** A majority-of-nine rule counts them as trials. The second
+reason is the thinness problem. **That pooling is also the more forgiving level is
+stated as a reason rather than left to be noticed**, and the document concedes
+that a reader who holds the more forgiving level should not be chosen by the party
+it forgives is entitled to the objection — answering it with the first reason.
+
+**AND THE CONCERN IS REDUCED, NOT ELIMINATED.** The non-floor-bound **candidate**
+stratum is ample at 11,163 of 11,384, or 98.06%. **But (d) is evaluated on TRADES,
+and the taken population is a function of realised outcomes, so its stratum size
+is not knowable at this commit.** Saying the concern is eliminated would put a
+knowable number where an unknowable one belongs. **Whether 0.05R is DETECTABLE on
+the stratum that materialises is routed to the first-run diagnostic gate**, where
+the stratum's size is a count rather than an outcome quantity. **If it proves too
+thin, that is a finding about the condition's evaluability and must be recorded as
+one rather than resolved by moving the threshold.**
+
+**THIRD — THE MAGNITUDE THRESHOLD, COMMITTED.**
+
+**The question was: at what magnitude does a breach of the after-costs risk rule
+stop being tolerable? The answer begins by establishing that magnitude alone
+cannot answer it.**
+
+> ### THE REJECTED CASE IS SMALLER THAN THE ACCEPTED ONE.
+
+The funding treatment rejected at **1.16 to 1.80 per cent of a risk unit** is
+smaller than the displacement budget accepted at **ten per cent**. **Any threshold
+of the form "tolerable below X" that rejects the first must reject the second.**
+That is not a difficulty to work around; **it is what tells us the separating
+property is not magnitude.**
+
+> ### THE SEPARATING PROPERTY IS MODALITY. A BREACH THAT OCCURS WITH PROBABILITY
+> ### ONE UNDER BASELINE MODEL ASSUMPTIONS IS A DIFFERENT OBJECT FROM A CONTINGENT
+> ### DISPLACEMENT UNDER AN ADVERSE ASSUMPTION ABOUT AN UNVALIDATED ESTIMATE.
+
+A certain breach **misstates the risk unit on every position it touches, with
+nothing needing to go wrong — a defect in the statement of the rule.** A
+contingent displacement **leaves the rule exact in the model as specified** and
+bounds how far reality may move it.
+
+**THE THRESHOLD, AS COMMITTED — FIRST MODALITY, THEN MAGNITUDE:**
+
+- **(i)** A **contingent** displacement is governed by the displacement budget and
+  by nothing in that section. Its tolerable magnitude is that budget.
+- **(ii)** A **certain** breach is tolerable **only if its magnitude is below the
+  imprecision with which the risk unit can already be delivered. The anchor is the
+  LOT-GRANULARITY DRAG: 0.80 per cent of nominal risk, pooled.**
+- **(iii)** A certain breach at or above that anchor **is not tolerable** unless
+  argued on its own grounds elsewhere.
+
+**The reasoning for the anchor:** flooring quantity to the venue's lot step
+already means the risk unit delivered is not the one nominated, by 0.80% pooled.
+**A certain breach smaller than that is below the precision at which the rule can
+be enforced at all; a larger one becomes the binding imprecision**, and the rule's
+stated figure stops describing what the mechanism delivers.
+
+**IT PASSES THE TEST IT HAD TO PASS.** The fill-price term at 0.017% is below the
+anchor and was accepted; the funding treatment at 1.16% is above it and was
+rejected. **Both prior decisions are reproduced, by a criterion neither of them was
+chosen against.**
+
+**AND THE DOCUMENT SEPARATES WHAT IS DERIVED FROM WHAT IS JUDGED. The ORDERING is
+derived** — forced by the three cases, since no magnitude-only rule can separate
+them. **The ANCHOR is a judgement**, recorded as one, with two alternatives named:
+anchoring on the tick grid gives a tighter bar, and anchoring on the worst single
+position's 9.21% granularity drag gives a far looser one. **The pooled figure was
+chosen because the threshold governs terms that apply systematically rather than
+to one position.**
+
+### 8.6 WHAT REMAINS OWED AFTER 4.1
+
+> ### SUB-POINT 4.1c IS CLOSED. SUB-POINT 4.1 IS CLOSED.
+
+**What 4.1 produced:** a constraint denominated in the risk unit, a closed form for
+the floor it implies, a level reached by a judgement recorded as judgement, the
+widths that follow, a stratification, the first count of a population that had been
+defined but never counted, and a magnitude threshold that makes three prior
+decisions consistent. **And no performance figure.**
+
+**INSIDE POINT 4:**
+
+1. **(d)'s DETECTABILITY**, routed to the first-run diagnostic gate.
+2. **THE VOLATILITY QUESTION — whether a stop clipped narrower than volatility
+   implies is itself undesirable.** It is a question about whether the geometry the
+   strategy was designed around survives being truncated. **It is argued nowhere in
+   this repository, no committed document takes a position on it, and it is named
+   as open and expressly not characterised as unimportant. It has NO OWNER at this
+   commit.**
+3. **Point 4's remaining agenda** — §9(a) through (g) below, **less what 4.1
+   discharged.** No committed document fixes a sub-point numbering beyond 4.1, so
+   the next step's label is for whoever opens it.
+
+**HOUSEKEEPING, both routed and neither done:**
+
+4. **The errata index should become a standalone artifact.** It lives inside a
+   frozen document that cannot be edited, so every entry after its own commit sits
+   somewhere else. **An index whose entries are scattered across the documents that
+   made them is the failure it was created to solve.**
+5. **`docs/prompts/STANDING_RULES.md` §12 is out of date** — it describes seven
+   practices as uncommitted and four were since committed. That file is amended by
+   a new file and never edited, **so an amendment is owed.**
+
+**AND BEYOND 4.1, THE VALIDATION DESIGN ITSELF IS STILL OWED IN FULL.** §9.
 
 ---
 
@@ -736,7 +879,9 @@ suggestions.**
 ### 10.1 THE NINE FROM POINT 5
 
 1. **`COST_TOLERANCE_R`'s justification, together with the 1.50% stop floor.**
-   One item, not two. **Being worked now as Point 4 sub-point 4.1** — §8.
+   One item, not two. **DISCHARGED by Point 4 sub-point 4.1**, which retired the
+   constant floor, re-denominated the constraint on the risk unit, and derived a
+   per-symbol per-direction floor from a level set by recorded judgement — §8.
 2. **The stop haircut itself.** 5 bps on BTC and ETH, 10 bps on SOL, and **it IS
    the entire slippage-and-gap model**, described in the engine's own source as a
    placeholder and confirmed not to be a venue-published figure. **It cannot be
@@ -747,7 +892,8 @@ suggestions.**
 3. **The fill-price term.** The exit fee is charged on the **stop level** while
    the actual fill sits a haircut away. **At most 0.0033 USDT, under 0.017% of a
    risk unit — and it makes a SHORT stop-out breach 1.0R**, in the direction the
-   standing rule exists to prevent.
+   standing rule exists to prevent. **The criterion it was missing is now
+   committed** — §8.5, third part — **and it reproduces the original acceptance.**
 4. **The Rule C hold-duration selection effect.** Exits free budget at settlement
    instants, and those are exactly the entry hours that draw 24-hour holds, so
    **the traded population is non-uniform in hold duration BY CONSTRUCTION — and
@@ -770,8 +916,10 @@ suggestions.**
    `costs.CostConfig.max_leverage`, which is **still 3.0** in legacy paths whose
    tests pin it while the new execution path implements **no leverage refusal at
    all. Two different answers coexist in the repository.**
-9. **At what level kill condition (d) is evaluated.** Now folded into sub-point
-   4.1c step 3.
+9. **At what level kill condition (d) is evaluated. DISPOSED at 4.1c step 3:
+   the stratum is defined under the committed per-symbol per-direction floor and
+   the level is POOLED**, with the per-fold decomposition reported but not
+   aggregated. **Detectability on the taken stratum remains routed forward.** §8.5.
 
 ### 10.2 THE POINT 6 QUEUE, AT FOUR
 
@@ -909,9 +1057,14 @@ tolerance to match" is available as a description of the same move.
 
 ### 11.6 THE DEFECT LEDGER
 
-**THE TOTAL IS 44**, contiguous from (1), and **instances are never renumbered or
+**THE TOTAL IS 46**, contiguous from (1), and **instances are never renumbered or
 recounted.** Each document adding one reads the total from the most recent
-document stating one and shows the arithmetic in a line.
+document stating one and shows the arithmetic in a line. **The two most recent:
+(45)**, a rule argued on cost protection — which reaches only the population whose
+required floor exceeds the cap — committed over both rejection populations, so
+**the partition and the rule's scope disagreed inside one section**; and **(46)**,
+a verification check asserting an exact count of eighteen modules importing the
+canonical banned-name list, which fired against a legitimate nineteenth.
 
 > **THE RECURRING CLASS: a numerical or directional criterion written from a
 > mental model of a quantity rather than from its implementation or its achievable
@@ -922,14 +1075,23 @@ constraints and its requirements**, at instances (23) to (26), then (33), (35),
 (39) and (44) — **in each case a requirement and a constraint referred to the same
 quantity and disagreed about who determined it.**
 
-**AN ALTERNATIVE READING OF THE TOTAL IS ON RECORD.** A reader holding a committed
-clause whose letter and illustration diverge to be itself an instance would reach
-a different total, and that is named rather than suppressed.
+**ALTERNATIVE READINGS OF THE TOTAL ARE ON RECORD RATHER THAN SUPPRESSED.** A
+reader holding a committed clause whose letter and illustration diverge to be
+itself an instance would have reached a different total at one point; and a reader
+holding instance (46) to be routine test iteration — on the ground that the
+obvious remediation was to fix the check rather than the module — **would stand at
+45 rather than 46.** The call was made on the ground that the inclusion criterion
+asks what remediation was **on offer**, not which one a careful implementer would
+have taken.
 
 **THE ERRATA INDEX stands at nine entries in its own frozen text and at ten in
 fact**, because the maintenance rule requires same-commit entry into a document
 its own change discipline forbids editing. **The gap is recorded rather than
 worked around, and the index's next holder must carry entry 10 forward.**
+Sub-point 4.1c's closing document restates the true standing and **routes the
+index to become a standalone artifact**, on the ground that **an index whose
+entries are scattered across the documents that made them is the failure it was
+created to solve.**
 
 ---
 
@@ -1031,7 +1193,7 @@ outcome quantity.**
 
 ### 12.5 THE REPOSITORY
 
-- **99 commits**, 49 test modules, **1,280 tests passing.**
+- **101 commits**, 49 test modules, **1,280 tests passing.**
 - `src/` carries `engine/` (signals, simulate, costs, sizing, portfolio,
   contracts, run, diagnostics), `risk/` (budget, exit_spec), `analysis/`,
   `timeframe/`, `folds/`, `sweep/`, `venue/`, `costs/`, `data/`, and
@@ -1117,16 +1279,28 @@ and that is the intended way to attack any of it.
 amendment that says it is doing so. These are the places where a second reader can
 contribute something rather than relitigate.**
 
-- **The magnitude threshold.** Genuinely open, genuinely owed, and **two committed
-  decisions currently contradict each other on it**: a funding treatment was
-  rejected **because** it lets a stop-out return worse than one risk unit at
-  roughly 0.0067R — corrected by erratum to 0.00589R — while the fill-price term
-  was **accepted** on magnitude grounds at under 0.017% of a risk unit. **Both may
-  be right, but no criterion between them has been stated, so both currently rest
-  on intuition.**
-- **Kill condition (d)'s evaluation level.** Per fold under the majority rule,
-  where it is undetectable in exactly the folds most likely to bite, or pooled.
-  Must be stated before any figure exists.
+- **THE MAGNITUDE THRESHOLD IS NOW COMMITTED AND IS NO LONGER OPEN AS A
+  QUESTION** — §8.5. **What remains arguable is its ANCHOR**, which the document
+  records as a judgement rather than a derivation. It names the two alternatives
+  and where each leads: the tick grid gives a tighter bar, the worst single
+  position's 9.21% granularity drag gives a far looser one. **A reader who holds
+  that modality should not order the test at all must then either reject the
+  displacement budget at ten per cent or accept the funding treatment at 1.16 per
+  cent, and naming which is how that reader argues a different threshold.** There
+  is no third option.
+- **THE VOLATILITY QUESTION — the freshest genuinely open item, and it has no
+  owner.** Population B is now clipped rather than rejected, so **1,967
+  candidates — 17.28% pooled and 38.13% of SOLUSDT — take a stop NARROWER than
+  their own volatility implies.** Whether that is undesirable is a question about
+  whether the geometry the thesis describes survives being truncated. **It is
+  argued nowhere, no committed document takes a position, and the closing document
+  explicitly declines to characterise it as unimportant.**
+- **Kill condition (d)'s evaluation level. DISPOSED — pooled** — but the reasoning
+  invites a stated objection and answers it: **pooling is also the more forgiving
+  level, and a reader who holds the more forgiving level should not be chosen by
+  the party it forgives is entitled to that objection.** The answer offered is the
+  fold-schedule argument, which does not depend on thinness. **Whether that answer
+  is sufficient is arguable.**
 - **The risk-displacement budget of ten per cent.** It is **the project owner's
   stated judgement**, not a finding, and the source says so: **a reader who
   disagrees is disagreeing with a person's stated judgement, which is the correct
@@ -1145,19 +1319,21 @@ contribute something rather than relitigate.**
 - **The frozen-specification admission criterion's circularity.** An operational
   marker is owed and none has been invented. §6.
 - **The population B result.** **More than a third of SOLUSDT's candidates ask for
-  a stop the frozen cap forbids.** Report 37 draws no conclusion from it, being
-  the first measurement of a quantity that was defined but never counted. **Nobody
-  has yet argued about what it means.**
+  a stop the frozen cap forbids.** Report 37 drew no conclusion from it, being the
+  first measurement of a quantity that was defined but never counted. **Step 3 then
+  decided its disposition — clip, not reject — on the cost ground alone, and
+  explicitly left the volatility question above unanswered.**
 
 ---
 
 ## 15. STATUS AT THE TIME OF WRITING
 
-- **Point 4 sub-point 4.1c step 2 is complete.** Step 3 is owed; the validation
-  design proper is owed after it.
-- **Defect ledger: 44.** **Errata index: 10 entries** — nine in the frozen index's
-  own text and entry 10 recorded elsewhere.
-- **Test suite: 1,280 passing.** 99 commits on `main`.
+- **SUB-POINT 4.1c AND SUB-POINT 4.1 ARE CLOSED**, at commit `2a04e37`. **The next
+  open item is Point 4's remaining agenda at §9(a) through (g), less what 4.1
+  discharged**, and no committed document fixes a sub-point label beyond 4.1.
+- **Defect ledger: 46.** **Errata index: 10 entries in fact against 9 in the frozen
+  index's own text**, with the index routed to become a standalone artifact.
+- **Test suite: 1,280 passing.** 101 commits on `main`.
 - **Performance firewall: ARMED.** No outcome quantity exists in this repository
   for this thesis.
 - **Holdout: SEALED AND UNSPENT, with the two disclosures at §2 attached to that

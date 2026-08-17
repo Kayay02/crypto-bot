@@ -299,3 +299,42 @@ def drag_reference_crossings(cfg, specs, symbol, direction, entry_price,
                 break
         out[float(reference)] = hit
     return out
+
+
+# ---------------------------------------------------------------------------
+# PART 5. THE CLIPPED COUNT ACROSS THE COMMITTED RANGE.
+# ---------------------------------------------------------------------------
+
+def clipped_at(population, cap_fraction):
+    """Candidates whose RAW ATR-derived stop exceeds `cap_fraction * entry`.
+
+    `sizing.STOP_ATR_MULT` is read, not retyped. This is bar geometry: it does
+    not depend on the cost tolerance, on the floor, or on any exit, and it is a
+    COUNT rather than an outcome quantity.
+    """
+    entry = population["entry_price"].to_numpy(float)
+    atr = population["atr"].to_numpy(float)
+    return (sizing.STOP_ATR_MULT * atr) > (float(cap_fraction) * entry)
+
+
+def sensitivity_table(population, caps=CAP_GRID, symbols=None):
+    """Clipped counts per symbol and pooled, at each candidate cap."""
+    symbols = tuple(rs.SYMBOLS) if symbols is None else tuple(symbols)
+    rows = []
+    for cap in caps:
+        mask = clipped_at(population, cap)
+        for symbol in symbols:
+            sel = (population["symbol"].to_numpy() == symbol)
+            n = int(sel.sum())
+            rows.append({"cap_fraction": float(cap),
+                         "cap_pct": 100.0 * float(cap),
+                         "cell": symbol, "n": n,
+                         "clipped": int((mask & sel).sum()),
+                         "clipped_fraction": (float((mask & sel).sum()) / n)
+                         if n else float("nan")})
+        n = int(len(population))
+        rows.append({"cap_fraction": float(cap), "cap_pct": 100.0 * float(cap),
+                     "cell": "POOLED", "n": n, "clipped": int(mask.sum()),
+                     "clipped_fraction": (float(mask.sum()) / n) if n
+                     else float("nan")})
+    return pd.DataFrame(rows)
