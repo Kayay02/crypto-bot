@@ -211,6 +211,14 @@ containment for the outcome-bearing artifacts, a four-condition fixture carve-ou
 the human-channel testimony, and ledger instance (49). Commits no aggregation
 rule.
 
+**`docs/design/04_2b_point_4_decomposition.md`**
+`90cd89063a6f96c8bbeb88c46cc71606e0d4ebe187290789de1192ef7ebfa840` — **introduced by the same commit as this
+manifest revision**. Point 4's sub-point structure: 4.0 and 4.1 TRANSCRIBED with
+their label drift recorded, 4.2 to 4.7 PRE-REGISTERED with deliverables, the §9
+mapping verified and §9(g) corrected from sub-point to completeness obligation,
+the freeze defined with six preconditions, and the open-items register placing all
+nine closing-record items -- four of which had never been cited. Ledger 50.
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -411,16 +419,16 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 26.**
+- **Frozen specification entries listed: 27.**
 - **Evidence reports listed: 20.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 58.**
+- **Total hashed entries: 59.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 49**, stated at
-  `docs/design/04_2a_artifact_containment.md` §6.4.
+- **Defect ledger: 50**, stated at
+  `docs/design/04_2b_point_4_decomposition.md` §7.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
   and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
