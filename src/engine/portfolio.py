@@ -53,6 +53,16 @@ time exit from it here would conflate the two -- numerically invisibly, because
 both are 3 -- so the max-hold bar arrives per candidate from the frozen calendar
 function that owns the index, and this module never computes it.
 
+THE HOLDOUT-BOUNDARY EXCLUSION IS THE FIRST THING THE RUN DOES. Document
+`docs/design/04_2c_run_structure.md` section 4.4 commits it and section 4.5
+states the population it produces: every candidate enters the run EXCEPT one
+whose scheduled max-hold exit falls at or after the holdout seal, and such a
+candidate is excluded BEFORE any 1m bar is requested on its behalf. The decision
+is arithmetic on the entry stamp alone -- the scheduled exit is a calendar
+function of the entry, so no sealed bar is touched to discover that a sealed bar
+would be needed. That ordering is the whole point: it is what makes the seal
+provable rather than merely observed to have held.
+
 PATH DEPENDENCE IS STRUCTURAL. In `full` mode whether a signal is taken depends
 on when earlier positions exited, which depends on how they resolved. Document
 05 section 6 pre-registered exactly this. There is therefore NO pre-computed
@@ -146,6 +156,14 @@ POSITION_COLUMNS = (
 )
 
 SKIP_COLUMNS = ("ts", "symbol", "direction", "reason")
+
+SEAL_EXCLUDED_COLUMNS = ("ts", "symbol", "direction", "entry_close_ms",
+                         "exit_bar_ts", "exit_close_ms")
+"""What is emitted about a candidate the seal excluded.
+
+STAMPS ONLY -- the entry, its close, and the scheduled exit the frozen calendar
+function derived from it. Nothing here is resolved, sized or evaluated, because
+an excluded candidate never reaches the sizing step at all."""
 
 
 class FirewallError(RuntimeError):
@@ -313,6 +331,109 @@ def size_position(entry_price, atr, direction, symbol, spec, cfg, price_tick,
                  qty_unfloored=qty_unfloored, qty=qty,
                  nominal_risk_usd=float(allocation_usd),
                  realised_risk_usd=realised, viable=viable, reason=reason)
+
+
+# ---------------------------------------------------------------------------
+# THE HOLDOUT-BOUNDARY EXCLUSION. It is placed ABOVE the 1m access section on
+# purpose: nothing below this line may run before it.
+#
+# `docs/design/04_2c_run_structure.md` section 4.4, committed there afresh:
+#
+#     A CANDIDATE IS EVALUATED ONLY IF ITS SCHEDULED MAX-HOLD EXIT FALLS
+#     STRICTLY BEFORE THE HOLDOUT SEAL. ONE WHOSE SCHEDULED EXIT FALLS AT OR
+#     AFTER IT IS EXCLUDED, AND EXCLUDED BEFORE ANY 1m BAR IS REQUESTED ON ITS
+#     BEHALF.
+#
+# WHICH STAMP IS "THE SCHEDULED MAX-HOLD EXIT", STATED BECAUSE THE SOURCE IS
+# LOOSE ABOUT IT. Section 4.4 identifies it twice with the third funding
+# settlement after the entry close -- "returns the third funding settlement
+# after the entry close unconditionally", and "an entry at the last in-sample
+# bar's close has its third settlement in 2025". That settlement is the instant
+# the position closes, which the candidate frame carries as `exit_close_ms`;
+# `exit_bar_ts` is one bar earlier, the OPEN of the bar the exit happens on.
+# The same sentence says `positions` writes the settlement to `exit_bar_ts`,
+# which is off by one bar. This module tests `exit_close_ms`, the exit event
+# itself, which is the reading the rule's own words carry and the wider of the
+# two: it excludes every candidate the other reading would exclude and one more
+# -- the one whose exit lands exactly ON the boundary instant. Neither reading
+# lets a sealed bar be requested.
+#
+# NO BACKSTOP IS ADDED AT THE POINT OF USE, and the reason is a difference from
+# the superseded engine rather than an oversight. That engine needed one because
+# its loader silently dropped the sealed years, so a boundary-crossing trade ran
+# off the end of the available records and exited on a data condition instead of
+# failing. The loader THIS module is wired to REFUSES: a request meeting the
+# sealed window raises rather than returning a short answer. And `max_hold` mode
+# reads no bar at all, so there is nothing there to guard.
+# ---------------------------------------------------------------------------
+
+def seal_boundary_ms():
+    """The first instant of the sealed window. READ, NEVER RESTATED.
+
+    Resolved through the sealed loader, which derives it from the one boundary
+    definition in the repository. A second declaration here would be a second
+    thing that can drift, which is the failure the loader's own docstring
+    records as the reason it declares no boundary of its own either.
+    """
+    return int(sealed.sealed_boundary_ms())
+
+
+def crosses_seal(exit_close_ms, boundary_ms):
+    """Does this candidate's SCHEDULED max-hold exit fall at or after the seal?
+
+    ARITHMETIC ON THE ENTRY STAMP ALONE. The scheduled exit is a calendar
+    function of the entry -- the frozen calendar function owns it and this
+    module never computes it -- so the answer is available before any bar of any
+    resolution is requested. That is the ordering property the rule turns on: no
+    sealed bar is touched to find out whether a sealed bar would be needed.
+
+    THE SCHEDULED EXIT, NOT A REALISED ONE, AND IT MUST BE. A realised exit is
+    an outcome; making membership of the evaluated population depend on it would
+    make membership path-dependent, which is the defect the boundary rule
+    refuses. The scheduled exit is the conservative bound -- a position
+    resolving earlier would not have needed the sealed hours, but that is not
+    knowable at the decision, and finding out is the act being prevented.
+
+    AT OR AFTER, NOT AFTER. A position closing exactly at the boundary instant
+    closes at the first instant of the sealed window, and the rule excludes it.
+    """
+    return int(exit_close_ms) >= int(boundary_ms)
+
+
+def _partition_on_seal(frame, boundary_ms):
+    """(evaluated, excluded). The candidate frame split by `crosses_seal`.
+
+    A SPLIT AND NOT A FILTER: the excluded rows are kept and returned so the
+    count can be reported. A rule that excludes some candidates and reports
+    nothing about the exclusion cannot be checked against the run, and the
+    exclusion sits at the one place where a silent loss is most plausible.
+    """
+    crossing = [crosses_seal(v, boundary_ms) for v in frame["exit_close_ms"]]
+    kept = [not c for c in crossing]
+    return (frame[kept].reset_index(drop=True),
+            frame[crossing].reset_index(drop=True))
+
+
+def _excluded_per_symbol(frame, excluded):
+    """The exclusion count per symbol, over every symbol the INPUT carried.
+
+    ZEROS ARE REPORTED RATHER THAN OMITTED, per
+    `docs/design/04_2d_aggregation.md` section 7.3: a count that appears only
+    when non-zero tells a reader nothing when absent, because absence is
+    ambiguous between "zero" and "not checked". This count is the case where
+    that bites hardest -- it is expected to be zero almost everywhere, so
+    omission-when-zero would make the exclusion invisible and indistinguishable
+    from one that was never implemented.
+
+    THE KEYS COME FROM THE INPUT FRAME, not from the excluded rows, which is
+    what makes a zero appear at all.
+    """
+    counts = {}
+    for name in frame["symbol"]:
+        counts[str(name)] = 0
+    for name in excluded["symbol"]:
+        counts[str(name)] += 1
+    return counts
 
 
 # ---------------------------------------------------------------------------
@@ -552,6 +673,29 @@ def run(candidates, cfg, specs=None, ticks=None, mode=MODE_MAX_HOLD,
     if not len(frame):
         return _empty_result(mode)
 
+    # --- 0. THE HOLDOUT-BOUNDARY EXCLUSION -------------------------------
+    # IT RUNS FIRST, and first is the requirement rather than a convenience.
+    # Everything above it is mode validation, the firewall check, the two
+    # contract-cache reads and the cache OBJECT's construction -- which stores a
+    # loader and calls nothing. The one place a 1m bar is asked for is
+    # `Bars1mCache.hour`, reached only from the exit branch of the grid loop
+    # below, so no bar of any resolution can be requested before this line.
+    #
+    # IT ALSO BOUNDS THE GRID. `_hourly_grid` runs to `max(exit_bar)`; a
+    # boundary-crossing candidate would extend it into the sealed window, and
+    # every hour of that extension carrying an open position is a sealed
+    # request. Removing the candidate removes the extension.
+    #
+    # IT IS NOT CONDITIONAL ON THE MODE. Section 4.5 commits the evaluated
+    # population as a rule and does not condition it on how exits resolve; a
+    # candidate held to a scheduled exit inside the seal also occupies a budget
+    # unit until then, so its presence changes which other candidates are taken
+    # whatever the mode.
+    frame, seal_excluded = _partition_on_seal(frame, seal_boundary_ms())
+    excluded_per_symbol = _excluded_per_symbol(candidates, seal_excluded)
+    if not len(frame):
+        return _empty_result(mode, seal_excluded, excluded_per_symbol)
+
     ts = [int(v) for v in frame["ts"]]
     symbol = list(frame["symbol"])
     direction = list(frame["direction"])
@@ -637,7 +781,8 @@ def run(candidates, cfg, specs=None, ticks=None, mode=MODE_MAX_HOLD,
             "%d candidate(s) were never evaluated; a signal bar fell outside "
             "the grid" % (len(order) - cursor))
 
-    return _result(closed, skips, partial_allocations, mode)
+    return _result(closed, skips, partial_allocations, mode, seal_excluded,
+                   excluded_per_symbol)
 
 
 def _row(position):
@@ -662,23 +807,44 @@ def _row(position):
     }
 
 
-def _result(closed, skips, partial_allocations, mode):
+def _result(closed, skips, partial_allocations, mode, excluded=None,
+            excluded_per_symbol=None):
     """Rows. NOTHING IS AGGREGATED BY EXIT REASON.
 
     The two counters below are over FLAGS, not over outcomes: document 06
     section 5.1 requires the intrabar-precedence count be reported and document
     06a section 5.3 requires the missing-bar flagged fraction be reported EVEN
     WHEN IT IS ZERO. Neither is a function of which exit a trade took.
+
+    AND THE SEAL-CROSSING EXCLUSION IS SURFACED HERE, THREE WAYS. It is a COUNT
+    OF EXCLUSIONS and not an outcome quantity -- `docs/design/04_2d_
+    aggregation.md` section 7.1 -- requiring no exit to be resolved and no level
+    to be evaluated. Section 7.2 requires it reported per partition cell and per
+    symbol, and section 7.3 requires it reported even when zero.
+
+    PER SYMBOL IS REPORTED HERE AND PER PARTITION CELL IS NOT, because the
+    partition is nine test windows plus an unassigned row and this module has no
+    fold schedule and must not acquire one. The excluded ROWS carry the entry
+    stamp each cell is assigned by, so the cell decomposition is a projection of
+    what is emitted here rather than something this module withholds.
     """
     positions = pd.DataFrame([_row(p) for p in closed],
                              columns=list(POSITION_COLUMNS))
     skipped = pd.DataFrame(list(skips), columns=list(SKIP_COLUMNS))
+    if excluded is None or not len(excluded):
+        excluded_rows = pd.DataFrame([], columns=list(SEAL_EXCLUDED_COLUMNS))
+    else:
+        excluded_rows = excluded[list(SEAL_EXCLUDED_COLUMNS)].reset_index(
+            drop=True)
     return {
         "mode": mode,
         "positions": positions,
         "skips": skipped,
         "n_taken": int(len(positions)),
         "n_skipped": int(len(skipped)),
+        "seal_excluded": int(len(excluded_rows)),
+        "seal_excluded_per_symbol": dict(excluded_per_symbol or {}),
+        "seal_excluded_rows": excluded_rows,
         "partial_allocations": int(partial_allocations),
         "both_levels_flagged": int(positions["both_levels_one_bar"].sum())
                                if len(positions) else 0,
@@ -689,5 +855,5 @@ def _result(closed, skips, partial_allocations, mode):
     }
 
 
-def _empty_result(mode):
-    return _result([], [], 0, mode)
+def _empty_result(mode, excluded=None, excluded_per_symbol=None):
+    return _result([], [], 0, mode, excluded, excluded_per_symbol)

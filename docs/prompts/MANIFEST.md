@@ -445,8 +445,12 @@ unmodified via `git status` rather than by hash.
   denominator; line 171 the haircut; line 71 the entry slippage, frozen at zero.
 - **`src/engine/sizing.py`** — exchange-real sizing. Line 252
   `per_unit_denominator` recovers path one's denominator from the engine.
-- **`src/engine/portfolio.py`** — the execution path. Lines 298 to 299 assemble
-  path two's denominator; line 187 `funding_per_unit`.
+- **`src/engine/portfolio.py`** — the execution path. Lines 316 to 317 assemble
+  path two's denominator; line 205 `funding_per_unit`; line 694 the
+  holdout-boundary exclusion, which runs before the grid at line 718 and before
+  the only 1m request at line 733. **The line references moved at the commit
+  implementing `docs/design/04_2c_run_structure.md` §4.4; they previously read
+  298 to 299 and 187.**
 - **`src/risk/exit_spec.py`** — the E-series constants. Line 101 the settlement
   count; line 115 the funding rate.
 
@@ -468,5 +472,28 @@ unmodified via `git status` rather than by hash.
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
   §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
-- **Test suite: 1341 passing.**
+- **Test suite: 1358 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
+
+### 5.1 THE HOLDOUT-BOUNDARY EXCLUSION, RECORDED HERE BECAUSE IT MOVED A FIGURE
+
+**`docs/design/04_2c_run_structure.md` §4.4 and §4.5 ARE NOW IMPLEMENTED IN
+`src/engine/portfolio.py`.** Freeze precondition 3 at
+`docs/design/04_2b_point_4_decomposition.md` §4.3 named the divergence; this
+closes it.
+
+> ### **`docs/handoff/26_point_5_2_budget_cost.md`'s FIGURES ARE NO LONGER
+> ### REACHABLE THROUGH `src/engine/portfolio.py`.** 11 of the 11,384
+> ### candidates carry a scheduled max-hold exit at or after the seal and are
+> ### excluded before evaluation. **The report is not falsified — it describes
+> ### a population the specification no longer admits**, and its own
+> ### implementation, `src/analysis/budget_cost.py`, is untouched and still
+> ### reproduces it.
+
+**THE EXCLUDED COUNT: 11** — BTCUSDT 2, ETHUSDT 4, SOLUSDT 5. **A COUNT OF
+EXCLUSIONS AND NOT AN OUTCOME QUANTITY**, per
+`docs/design/04_2d_aggregation.md` §7.1: no exit is resolved and no level
+evaluated to obtain it.
+
+**WHETHER REPORT 26 IS RE-MEASURED OR AN ERRATUM IS LOGGED IS NOT SETTLED BY ANY
+COMMITTED DOCUMENT AND IS NOT DECIDED HERE.**

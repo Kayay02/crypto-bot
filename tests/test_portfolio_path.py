@@ -47,12 +47,25 @@ LONG, SHORT = pf.LONG, pf.SHORT
 MINUTE_MS = pf.MINUTE_MS
 BAR_MS = pf.BAR_MS
 
-#: Report 26's figures. THE REGRESSION TARGETS, restated here as literals on
-#: purpose: this file is where a drift from the frozen report must fail.
+#: Report 26's figures, over the population it measured -- WITHOUT the
+#: holdout-boundary exclusion, which did not exist when it was measured. Kept
+#: here as the comparison, not as this path's target: see
+#: `test_REGRESSION_reconciles_against_report_26_over_the_committed_population`.
 REPORT_26_TAKEN = 6_021
 REPORT_26_SKIPPED = 5_363
 REPORT_26_TOTAL = 11_384
 REPORT_26_PER_SYMBOL = {"BTCUSDT": 1_973, "ETHUSDT": 1_963, "SOLUSDT": 2_085}
+
+#: THE SAME MACHINERY OVER THE COMMITTED POPULATION.
+#: `docs/design/04_2c_run_structure.md` section 4.5 removes every candidate
+#: whose scheduled max-hold exit falls at or after the seal. THE REGRESSION
+#: TARGETS, restated here as literals on purpose: this file is where a drift
+#: from the rule that ships must fail.
+SEAL_EXCLUDED = 11
+POST_EXCLUSION_TAKEN = 6_015
+POST_EXCLUSION_SKIPPED = 5_358
+POST_EXCLUSION_PER_SYMBOL = {"BTCUSDT": 1_972, "ETHUSDT": 1_962,
+                             "SOLUSDT": 2_081}
 
 #: Synthetic reference cells, report 28's own. Floor-bound: the ATR is small
 #: enough that the 1.50% floor sets the stop, which is the stratum where the
@@ -339,22 +352,71 @@ def regression(candidates, cfg):
     return pf.run(candidates, cfg, mode=pf.MODE_MAX_HOLD)
 
 
-def test_REGRESSION_reproduces_report_26_exactly(regression):
-    """THE STOP CONDITION OF THIS STEP IF IT FAILS.
+def test_REGRESSION_reconciles_against_report_26_over_the_committed_population(
+        regression):
+    """THE STOP CONDITION OF THIS STEP IF IT FAILS, AND IT MOVED. READ THIS.
 
-    Report 26 verified the budget, the rotation and the intra-bar order against
-    this population. If this execution path disagrees, one of the three differs
-    from the implementation that report measured, and every figure it states
-    describes a rule other than the one that ships.
+    REPORT 26's FIGURES ARE NO LONGER REACHABLE THROUGH THIS PATH, AND THAT IS
+    A FINDING RATHER THAN A DRIFT. `docs/design/04_2c_run_structure.md` section
+    4.4 commits the holdout-boundary exclusion and section 4.5 commits the
+    population it produces: 11 of report 26's 11,384 candidates carry a
+    scheduled max-hold exit at or after the seal and are excluded before
+    evaluation. Report 26 measured the population WITHOUT that rule, because the
+    rule did not exist when it was measured.
+
+        THE REPORT IS NOT WRONG. IT DESCRIBES A POPULATION THE SPECIFICATION NO
+        LONGER ADMITS. Its own figures remain pinned where they were produced --
+        `budget_cost.allocate` and its tests are untouched by the exclusion.
+
+    WHAT IS ASSERTED HERE INSTEAD, AND WHY IT IS STRONGER. The reconciliation
+    identity: taken plus skipped plus excluded is report 26's total, exactly. It
+    fails if the exclusion drops a candidate silently, if it excludes one it
+    should not, or if the budget machinery this path shares with report 26
+    diverges. The pre-exclusion figures are kept below so the difference is
+    visible in the file rather than only in a commit message.
     """
-    assert regression["n_taken"] == REPORT_26_TAKEN
-    assert regression["n_skipped"] == REPORT_26_SKIPPED
-    assert regression["n_taken"] + regression["n_skipped"] == REPORT_26_TOTAL
+    excluded = regression["seal_excluded"]
+    assert excluded == SEAL_EXCLUDED
+    assert regression["n_taken"] == POST_EXCLUSION_TAKEN
+    assert regression["n_skipped"] == POST_EXCLUSION_SKIPPED
+
+    # THE RECONCILIATION. Nothing is lost between report 26's population and
+    # this one except what the rule removed, and the rule reports what it
+    # removed.
+    assert (regression["n_taken"] + regression["n_skipped"] + excluded
+            == REPORT_26_TOTAL)
+    assert REPORT_26_TAKEN - POST_EXCLUSION_TAKEN == 6
+    assert REPORT_26_SKIPPED - POST_EXCLUSION_SKIPPED == 5
 
     positions = regression["positions"]
-    for symbol, expected in REPORT_26_PER_SYMBOL.items():
+    for symbol, expected in POST_EXCLUSION_PER_SYMBOL.items():
         assert int((positions["symbol"] == symbol).sum()) == expected, symbol
-    assert sum(REPORT_26_PER_SYMBOL.values()) == REPORT_26_TAKEN
+    assert sum(POST_EXCLUSION_PER_SYMBOL.values()) == POST_EXCLUSION_TAKEN
+
+    # AND THE EXCLUSION COUNT IS REPORTED PER SYMBOL, ZEROS INCLUDED.
+    per_symbol = regression["seal_excluded_per_symbol"]
+    assert set(per_symbol) == set(REPORT_26_PER_SYMBOL)
+    assert sum(per_symbol.values()) == excluded
+
+
+def test_the_excluded_candidates_are_the_ones_at_the_windows_far_edge(
+        regression, candidates):
+    """WHERE THE 11 SIT, ASSERTED RATHER THAN ASSUMED.
+
+    Section 4.4 bounds the excluded set above by the candidates entering in the
+    window's final day. If one turned up earlier, the scheduled exit is not the
+    calendar function this rule believes it is.
+    """
+    boundary = sealed.sealed_boundary_ms()
+    rows = regression["seal_excluded_rows"]
+    assert len(rows) == SEAL_EXCLUDED
+    assert (rows["exit_close_ms"] >= boundary).all()
+    assert (rows["ts"] < boundary).all()
+    assert int(rows["ts"].min()) >= boundary - 24 * BAR_MS
+
+    # AND NO CANDIDATE THE RULE KEEPS CARRIES A SCHEDULED EXIT PAST THE SEAL.
+    kept = int((candidates["exit_close_ms"] < boundary).sum())
+    assert kept + SEAL_EXCLUDED == REPORT_26_TOTAL
 
 
 def test_the_regression_evaluated_no_level_and_read_no_1m_bar(regression):
@@ -1218,50 +1280,63 @@ def test_the_regression_opened_no_position_on_a_sealed_bar(regression):
     assert int(regression["skips"]["ts"].max()) < boundary
 
 
-def test_a_full_mode_request_that_reaches_the_holdout_is_REFUSED(cfg, specs,
-                                                                 ticks):
-    """THE SEAL, THROUGH THE LOADER THIS MODULE IS WIRED TO.
+def test_a_full_mode_candidate_that_reaches_the_holdout_is_EXCLUDED_not_refused(
+        cfg, specs, ticks):
+    """THE SEAL, THROUGH THE LOADER THIS MODULE IS WIRED TO. AND IT CHANGED.
 
-    A candidate whose life crosses the boundary makes the loop ask the sealed
-    loader for an hour inside the holdout, and the loader refuses. Nothing here
-    disables a pre-read guard, so per report 29 section 9.3 it may face the real
-    loader: the request is refused BEFORE any file is opened.
+    THIS TEST USED TO ASSERT THE CRASH. Before
+    `docs/design/04_2c_run_structure.md` section 4.4 was implemented, a
+    boundary-crossing candidate made the loop ask the sealed loader for a 2025
+    hour and the loader refused, and that refusal was the seal's proof in this
+    file. The rule removes it: the candidate never reaches the loop, so there is
+    nothing to refuse.
+
+        A REFUSAL PROVES THE BARRIER WORKS. AN EMPTY REQUEST LOG PROVES THE
+        BARRIER WAS NEVER APPROACHED, WHICH IS THE STRONGER PROPERTY AND IS THE
+        ONE THE RULE COMMITS.
+
+    The refusal itself is asserted directly on the loader, and this property is
+    asserted over a wider population, in
+    `tests/test_holdout_boundary_exclusion.py`. Nothing here disables a pre-read
+    guard, so per report 29 section 9.3 this may face the real loader -- and the
+    assertion is that it was never called.
     """
     boundary = sealed.sealed_boundary_ms()
     bar = boundary - BAR_MS
     symbol, entry, atr = CELLS[0]
     candidate = _candidate(symbol, LONG, bar, entry, atr)
-    assert candidate["exit_bar_ts"] >= boundary, "the fixture must cross it"
+    assert candidate["exit_close_ms"] >= boundary, "the fixture must cross it"
 
     cache = pf.Bars1mCache()
     assert cache._loader is sealed.load, "this one faces the REAL loader"
-    with pytest.raises(sealed.SealBreach):
-        pf.run(_frame([candidate]), cfg, specs=specs, ticks=ticks,
-               mode=pf.MODE_FULL, firewall_token=pf.FIREWALL_TOKEN,
-               cache=cache)
+    result = pf.run(_frame([candidate]), cfg, specs=specs, ticks=ticks,
+                    mode=pf.MODE_FULL, firewall_token=pf.FIREWALL_TOKEN,
+                    cache=cache)
 
-    # REFUSED BEFORE ANYTHING WAS OPENED, and no readable hour was touched
-    # either: the first and only request the loop made was the sealed one.
-    assert len(cache.requests) == 1, cache.requests
-    assert cache.requests[0][1] >= boundary
-    assert cache.misses == 1 and cache.hits == 0
+    # NOTHING WAS ASKED FOR: not the sealed hour, and not a readable one either.
+    assert cache.requests == [], cache.requests
+    assert cache.misses == 0 and cache.hits == 0
+    assert result["seal_excluded"] == 1
+    assert result["n_taken"] == 0 and result["n_skipped"] == 0
 
 
 def test_full_mode_is_NEVER_RUN_ON_REAL_DATA_IN_THIS_MODULE():
     """THE CONSTRAINT OF THIS STEP, ASSERTED OVER THIS FILE'S OWN AST.
 
     Every `full`-mode invocation must be handed a cache built from a SYNTHETIC
-    series. The single exception is the holdout refusal above, which faces the
-    real loader deliberately and is refused BEFORE a file is opened -- asserted
-    there by its request log.
+    series. The single exception is the holdout exclusion above, which faces the
+    real loader deliberately and never calls it -- asserted there by its empty
+    request log.
 
     Report 29 section 9.3's rule is binding here: it was written because it was
     violated, and it is why no mutation in this step's battery disables a
     pre-read guard while facing the real directory.
     """
     tree = ast.parse(open(__file__).read())
-    exempt = {"test_a_full_mode_request_that_reaches_the_holdout_is_REFUSED",
-              "test_full_mode_cannot_be_entered_without_the_token"}
+    exempt = {
+        "test_a_full_mode_candidate_that_reaches_the_holdout_is_EXCLUDED_"
+        "not_refused",
+        "test_full_mode_cannot_be_entered_without_the_token"}
 
     for function in ast.walk(tree):
         if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
