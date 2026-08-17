@@ -103,24 +103,46 @@ def test_NO_MODULE_DEFINES_ITS_OWN_COPY_OF_THE_BANNED_LIST():
         "src.firewall instead:\n  " + "\n  ".join(offenders))
 
 
+#: The eighteen modules that enforced the list when it was centralised. Named by
+#: extension rather than counted, so that a module DROPPING its guard fails while
+#: a new module ADDING one does not. A bare count would have done the opposite.
+ENFORCING_MODULES = tuple(os.path.join("tests", name) for name in (
+    "test_budget_cost.py", "test_exit_spec.py", "test_exposure_profile.py",
+    "test_floor_curve.py", "test_haircut_floor_curve.py",
+    "test_haircut_share.py", "test_haircut_share_rerun.py",
+    "test_intrabar_span.py", "test_portfolio_path.py", "test_risk_budget.py",
+    "test_risk_unit_floor_curve.py", "test_rsi_breakout_profile.py",
+    "test_sealed_1m.py", "test_sizing.py", "test_sizing_drag.py",
+    "test_sweep_population.py", "test_timeframe_resample.py",
+    "test_venue_constraints.py"))
+
+
 def test_every_enforcing_module_imports_the_canonical_list():
     """THE OTHER HALF: the guards must still exist, and must reach the list by
-    import. A module that dropped its guard entirely would pass the test above."""
-    importers = []
+    import. A module that dropped its guard entirely would pass the test above.
+
+    STATED AS A SUPERSET RELATION, NOT A COUNT. The count form asserted exactly
+    eighteen importers and fired against `tests/test_level_consequences.py`,
+    which legitimately imports the list to check a module is clean. **A criterion
+    written from a snapshot of how many modules happened to enforce the guard is
+    the recurring defect class applied to a test.** The membership is what
+    matters and it is named by extension.
+    """
+    importers = set()
     for path in _python_files():
-        # This module imports the list in order to TEST it, and enforces no
-        # guard over its own AST, so it is not one of the eighteen.
-        if path in (CANONICAL, THIS_FILE):
+        if path == CANONICAL:
             continue
         tree = ast.parse(open(os.path.join(ROOT, path)).read())
         for node in ast.walk(tree):
             if (isinstance(node, ast.ImportFrom)
                     and node.module == "src.firewall"
                     and any(a.name == "PERFORMANCE_NAMES" for a in node.names)):
-                importers.append(path)
-    assert len(importers) == 18, (
-        "expected the eighteen enforcing modules to import the list, found %d: "
-        "%s" % (len(importers), sorted(importers)))
+                importers.add(path)
+    missing = sorted(set(ENFORCING_MODULES) - importers)
+    assert not missing, (
+        "these enforced the banned-name guard and no longer import the list: %s"
+        % missing)
+    assert len(ENFORCING_MODULES) == 18
 
 
 # ---------------------------------------------------------------------------

@@ -247,12 +247,25 @@ precedent. **Superseded as governing, not falsified.**
 per-symbol ceilings; §2.5 the committed grid; §3.5 the short-only pole; §5.1 the
 set probe.
 
+**`docs/handoff/37_point_4_1c_level_and_consequences.md`**
+`b236ce325fb6af3bc2d820e6505e0479a55035469fcb5eaef8e635c026e7ebbe` — **introduced by the same commit as this
+manifest revision**; `git log --diff-filter=A` over the path is authoritative.
+Sub-point 4.1c step 2: the level and its epistemic status, the floor widths, the
+stress comparator with the worst cell named, the stratum over the 11,384
+candidates, and the FIRST COUNT of the ATR-above-cap rejection population.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
 
 **Source code is an implementation of the specification and is not a member of
 it**, per amendment 2 §2.
+
+**`src/analysis/level_consequences.py`**
+`f558673aadddf1df27816c050d4445332302108571d384a4e01cf0764bfc789a` — **introduced by the same commit as this
+manifest revision**. Report 37's derivation module: the level from the committed
+budget and uncertainty parameter, the comparator, and the stratification. Imports
+`risk_unit_floor_curve` rather than reimplementing the closed form.
 
 **`src/firewall.py`**
 `529f7eaec40c1624d9af0b7eadee995719a341aa77630af6c5aa48df20b52809` — commit
@@ -325,17 +338,17 @@ unmodified via `git status` rather than by hash.
 ## 5. STATUS AT THIS COMMIT
 
 - **Frozen specification entries listed: 21.**
-- **Evidence reports listed: 15.**
-- **Implementation modules listed: 9** — `src/firewall.py` plus eight under
-  `src/analysis/`, with 6 more analysis modules present and omitted as unused by
+- **Evidence reports listed: 16.**
+- **Implementation modules listed: 10** — `src/firewall.py` plus nine under
+  `src/analysis/`, with 5 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 45.**
+- **Total hashed entries: 47.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 44**, stated at `docs/design/04_1d_standing_practices.md` §5.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
   and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**, which that
   section records the index's next holder must carry forward, the index itself
   being frozen and uneditable.
-- **Test suite: 1261 passing.**
+- **Test suite: 1280 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
