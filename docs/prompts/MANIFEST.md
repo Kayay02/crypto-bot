@@ -172,6 +172,13 @@ population B; §3 disposes of kill condition (d) as to stratum and level; §4 co
 the magnitude threshold, ordered modality-then-magnitude; §5 the ledger at 46 and
 the errata index's true standing; §6 4.1c's closing position.
 
+**`docs/design/04_1e_stop_cap.md`**
+`6acab4f554f6fc638a15302d4e3223e264b1a580437181c812e28fbb134d3812` — **introduced by the same commit as this
+manifest revision**. Records the frozen `stop_max_pct` of 0.035 as **WRONG** on
+four computable grounds and STOPS: no replacement is chosen. §3 states the
+uncomputable side, §4 commits a Point 6 falsifier, §5 records the thesis gap on
+the clipped fraction, §6 the ledger at 47.
+
 **`docs/design/04_1d_standing_practices.md`**
 `e4959d4cfc25489c2d016efbfe7c95e04ada360df8546f8bf907314c034e9f3b` — commit
 **introduced by the same commit as this manifest revision** — its hash cannot
@@ -356,16 +363,15 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 22.**
+- **Frozen specification entries listed: 23.**
 - **Evidence reports listed: 17.**
 - **Implementation modules listed: 11** — `src/firewall.py` plus ten under
   `src/analysis/`, with 4 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 50.**
+- **Total hashed entries: 51.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 46**, stated at
-  `docs/design/04_1c_consequences_and_thresholds.md` §5.4.
+- **Defect ledger: 47**, stated at `docs/design/04_1e_stop_cap.md` §6.3.
 - **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
   and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
   says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
