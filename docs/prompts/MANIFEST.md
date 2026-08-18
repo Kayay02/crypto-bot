@@ -21,47 +21,85 @@ previously recorded the practice as uncommitted, which was true until
 A hash here that does not match the file is a defect in this file, not evidence
 about the file. **Recompute rather than trust.**
 
+### 0.0 THIS FILE CONTAINS ONE ENFORCED NAME, AND IT ALWAYS HAS
+
+**IN THE PROSE AT §1.2 DESCRIBING WHAT `docs/design/00_standing_brief.md`
+TRANSCRIBES.** It is a name in a list of premises, not a figure, and it has been
+present at every one of this file's revisions since `c6b71c5`.
+
+> ### **IT IS DECLARED HERE BECAUSE `docs/prompts/STANDING_RULES.md` §0.1 ASSERTS
+> ### THAT THIS FILE CONTAINS NONE, AND THAT ASSERTION WAS FALSE WHEN WRITTEN.**
+> ### Errata entry 13 at `docs/design/04_3b_record_reconciliation.md` §8.1.
+
+**A CHECK FINDING ONE ENFORCED NAME IN THIS FILE HAS FOUND THAT LINE. NO OTHER
+OCCURRENCE IS PERMITTED.**
+
 ### 0.1 HOW THESE HASHES WERE PRODUCED
 
 **EVERY HASH BELOW WAS COMPUTED FRESH FROM THE WORKING TREE AT THIS COMMIT.** None
 was copied from any document.
 
-**THE CROSS-CHECK, RE-RUN AT THIS REVISION.** Every 64-character hexadecimal
-string appearing in any document under `docs/` other than this manifest was
-extracted and compared against the working tree: **44 occurrences, of which 40
-resolve to a file in the tree and match it exactly, and 4 do not.**
+### 0.2 THE CROSS-CHECK, AND THE PRIOR REVISION'S FIGURE WAS WRONG
 
-> ### **THE FIGURES ARE NOT COMPARABLE TO THE PRIOR REVISION'S 42 AND 30, AND THE
-> ### REASON IS THAT THE FILE SET DIFFERS AND NEITHER RUN STATED IT.** This run
-> ### hashed **every** file in the tree outside `.git/` and `.venv/`, so the
-> ### payload digests in `docs/design/06_exit_resolution_spec.md` and
-> ### `docs/handoff/25_point_5_2_venue_constraints.md` — ten strings the prior
-> ### revision classified as "not file hashes at all" — now resolve against the
-> ### stored response bodies under `data/reference/`. **They were always file
-> ### hashes; the earlier run simply did not hash those files.** Recorded as a
-> ### looseness in the earlier statement rather than as a correction of it, since
-> ### neither run committed a file set.
+> ### **THE FIGURE THIS SECTION CARRIED AT `ef67cc5` -- "44 occurrences, of which
+> ### 40 resolve to a file in the tree and match it exactly, and 4 do not" -- IS
+> ### NOT WHAT THE STATED METHOD RETURNS.**
 
-**THE FOUR THAT DO NOT RESOLVE, EACH ACCOUNTED FOR:**
+**RE-RUN AGAINST THE `ef67cc5` TREE BY THE STATED METHOD, IN FOUR VARIANTS**, so
+that the file set and the counting rule could not be blamed: all of `docs/` less
+this manifest, and `docs/design/` plus `docs/handoff/` only, each counting
+occurrences and then distinct strings. **The four give 49/43/6, 49/43/6, 36/30/6
+and 36/30/6.** The occurrence total moves with the counting rule; **the unresolved
+count is six in every variant and four in none.**
 
-- **three manifest-at-entry citations** — in `docs/design/04_2c_run_structure.md`,
-  `docs/design/04_2d_aggregation.md` and
-  `docs/handoff/42_point_4_2e_report_back.md`. Each records the hash this file
-  carried when that document verified it, and **each is superseded the moment this
-  file is next revised.**
-- **one recorded module hash** — `docs/handoff/31_point_5_closing.md` line 78
+**THE TWO THE PRIOR LIST MISSED ARE OF EXACTLY THE KIND IT ENUMERATES** --
+`docs/handoff/43_point_4_stop_cap_implementation.md` and
+`docs/handoff/44_point_4_3a_report_back.md` each record this file's hash as it
+stood at their own entry, and each was orphaned by the very revision that counted
+them. **Logged as ledger instance (56) at
+`docs/design/04_3b_record_reconciliation.md` §9.5, and corrected here in place
+rather than by erratum, this file being a living index.**
+
+**THE CONCLUSION WAS NOT DAMAGED AND IS RE-ESTABLISHED HERE RATHER THAN
+INHERITED.**
+
+### 0.3 THE CROSS-CHECK AT THIS REVISION
+
+**Every 64-character hexadecimal string appearing in any document under `docs/`
+other than this manifest was extracted and compared against a hash of every file
+in the tree outside `.git/` and `.venv/`.**
+
+- **51 occurrences, of which 44 resolve to a file in the tree and match it
+  exactly, and 7 do not.**
+- **38 distinct strings, of which 31 resolve and 7 do not.**
+
+**THE SEVEN THAT DO NOT RESOLVE, EACH ACCOUNTED FOR AND NONE LEFT OVER:**
+
+- **SIX MANIFEST-AT-ENTRY CITATIONS** -- in
+  `docs/design/04_2c_run_structure.md`, `docs/design/04_2d_aggregation.md`,
+  `docs/design/04_3b_record_reconciliation.md`,
+  `docs/handoff/42_point_4_2e_report_back.md`,
+  `docs/handoff/43_point_4_stop_cap_implementation.md` and
+  `docs/handoff/44_point_4_3a_report_back.md`. Each records the hash this file
+  carried when that document verified it, and **each is superseded the moment
+  this file is next revised.**
+- **ONE RECORDED MODULE HASH** -- `docs/handoff/31_point_5_closing.md` line 78
   records `src/engine/portfolio.py` as it stood at commit `1e66c17`. **That file
   was legitimately modified at commit `1064028`**, which implemented
-  `docs/design/04_2c_run_structure.md` §4.4's exclusion, so the recorded hash is a
-  record of the file then and not a claim about the file now.
+  `docs/design/04_2c_run_structure.md` §4.4's exclusion. **Its current hash is now
+  carried at §4 of this file**, which is the remedy `04_3b` §6.3 commits: a
+  reader comparing the two can see the move rather than infer it.
 
 > ### **ZERO MISMATCHES: NO STRING THAT NAMES A FILE AS IT STANDS NOW FAILS TO
-> ### MATCH IT, AND NO NAMED FILE IS ABSENT.** No silent-edit event is detected at
-> ### this commit.
+> ### MATCH IT, AND NO NAMED FILE IS ABSENT. No silent-edit event is detected at
+> ### this commit.**
 
 **EACH DOCUMENT THAT RECORDS A HASH IT VERIFIED ON ENTRY ADDS AN ORPHAN THE MOMENT
-THE TARGET IS NEXT REVISED. That is expected and is not a defect** — the citation
-is a record of what was verified then, not a claim about the file now.
+THE TARGET IS NEXT REVISED. That is expected and is not a defect** -- the citation
+is a record of what was verified then, not a claim about the file now. **The
+orphan count therefore grows by one for every step that follows the read-back
+protocol, and a future revision reporting a smaller number has miscounted rather
+than improved.**
 
 ---
 
@@ -305,6 +343,21 @@ is `realised_risk_usd` and the operator is equal weighting. §7 disposes of the
 geometry heterogeneity. §8 takes §5.4's vocabulary part. **Ledger unchanged at
 52. Commits no threshold, no kill condition, and closes no membership.**
 
+**`docs/design/04_3b_record_reconciliation.md`**
+`27a91ef4c6f888eba9e2cf308b7283abe2426929b3c8524aa95f32da8ca502aa` — **introduced by the same commit as this
+manifest revision**. Sub-point 4.3b. **THE RECORD RECONCILED.** §2.3 commits the
+BRIEFING DISCIPLINE -- a briefing is regenerated wholesale and never amended, it
+carries no moving figure but cites one, and it states the commit at which it was
+last regenerated -- and §2.4 corrects six divergences in
+`docs/prompts/STANDING_RULES.md`, of which only one was wrong when written. §3
+logs two breaches at commit `2a04e37` and indexes `docs/prompts/ORIENTATION.md`.
+§4 corrects three counts and finds a fourth. §5 adjudicates the six pre-thesis
+documents on report 41's own criteria: **NO BREACH**, with the chain search run
+in both directions and the three apparent matches disambiguated. §6 hashes the
+engine modules. §7 puts the register at fifteen. §8 logs errata 13, 14 and 15;
+§9 logs ledger 53, 54, 55 and 56. **Commits no metric, no threshold and no kill
+condition.**
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -444,6 +497,73 @@ against §8.2's split, the geometry decision and what survives R-normalisation,
 addition. **§12.1 records one requirement-against-constraint: the register
 assigns §9(b) to 4.3 and the direction assigns membership to 4.4.**
 
+### 2.1 THE PRE-THESIS RECORD — THE SUPERSEDED THESIS'S DOCUMENTS
+
+**ADDED BY `docs/design/04_3b_record_reconciliation.md` §5.7.** These six were
+outside this index from its creation at `c6b71c5` until that commit, and the
+reason is recorded at that document's §5.6: **the index was built by walking the
+chain the current thesis rests on, and the chain begins at the thesis.** They are
+exactly the `docs/handoff/` documents committed **before** the thesis freeze at
+`02e47a5` on 2026-08-11.
+
+> ### **THEY ARE NOT MEMBERS OF THE FROZEN SPECIFICATION.**
+> ### `docs/design/04_0_divergence_disposition_amendment_2.md` §2's open-forward
+> ### clause reads "SUBSEQUENTLY", and its reference point is its own commit
+> ### `fd45afd` on 2026-08-14. **All six precede it.** The argument is at
+> ### `04_3b` §5.7 and the contrary reading is stated there too.
+
+**THEY ARE INDEXED BECAUSE §0's SCOPE IS "EVERY ARTIFACT A SUBSEQUENT STEP MIGHT
+NEED TO VERIFY", NOT "EVERY MEMBER".** Three of the six are cited by the live
+chain. **Each entry states whether the document carries outcome quantities**,
+which is the disclosure `04_3b` §5.5 owes and which is the thing whose absence
+made the surface unmanaged.
+
+**`docs/handoff/04_point_1r_opening.md`**
+`161ef151af676aaf9082d43b1bf1124c880d6cf7fd9ed1b276b8ad5203d5a221` — commit
+`72ecd8b`, 2026-08-05. Opens Point 1R as an amendment pass. **Reconstructed after
+the fact and its own preamble says so; it must not be cited as contemporaneous.**
+**NO OUTCOME QUANTITY** — its five enforced-name occurrences are a prohibition
+list and one task name.
+
+**`docs/handoff/05_point_1r.md`**
+`b6641db63b53c8b56b7d3454fb4c8a1218b8058855b91879b60ed2cfd166ace2` — commit
+`0da9d11`, 2026-08-04. The Point 1R strategy amendment pass, 1R.1 to 1R.5.
+**NO OUTCOME QUANTITY** — design parameters, pre-committed thresholds, and
+arithmetic on a dispersion figure the document labels an estimate rather than a
+measurement.
+
+**`docs/handoff/06_structural_outcome.md`**
+`bf946b7498009ee066a6f049fc8b63b6873a142603f088cc04235022819093eb` — commit
+`c0cf37e`, 2026-08-05. The structural measurement pass and the Point 3R engine
+amendment. **It is the origin of the derived stop floor.** **NO OUTCOME QUANTITY,
+AND NOT ONE OCCURRENCE OF ANY ENFORCED NAME ANYWHERE IN THE FILE.**
+
+**`docs/handoff/08_point_4_pre_registration.md`**
+`1aa293ae5c9529eeafaf5d38da954184351a7e46e86487151be84d611c8e4d55` — commit
+`7a32610`, 2026-08-07. **THE SUPERSEDED POINT 4's PRE-REGISTRATION.** Its body is
+a pre-registration and its preamble records the firewall as intact when it was
+written. **ITS POST-LIFT APPENDIX M.1 CARRIES OUTCOME QUANTITIES** and labels
+itself post-lift. **CITED BY THE LIVE CHAIN** at
+`docs/design/04_2c_run_structure.md` §4.4 and
+`docs/design/04_2d_aggregation.md` §5.3 and §7.2 — **for appendix M's rule text
+only, each citation disclaiming the document's authority in its own words.**
+
+**`docs/handoff/16_point_4_closing.md`**
+`3c254863e4201aa94973e9411a1e36ad6105df9b1d76591feeabacdbed7a7a25` — commit
+`82dcc7c`, 2026-08-09. **THE SUPERSEDED POINT 4's CLOSING RECORD — what killed the
+first hypothesis.** **CARRIES OUTCOME QUANTITIES THROUGHOUT, AND THEY ARE ITS
+PRINCIPAL CONTENT.** Cited eight times, never for a figure: twice as an excluded
+correction, twice as a filename, once for a count of table rows, and four times
+for provenance.
+
+**`docs/handoff/19_timeframe_rule.md`**
+`7728c3da39e1d455f1a20e32586bd6be351ee5424a00096eb82fd265e111b3e4` — commit
+`96c96cf`, 2026-08-09. The timeframe selection rule, pre-registered: the
+admissibility rule, the multiplier band and finest-admissible selection.
+`docs/handoff/22_point_1_thesis.md` §9 inherits **the rule** from it, by hash.
+**NO OUTCOME QUANTITY** — its two occurrences are a declaration that none is
+computed anywhere in the step.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
@@ -517,54 +637,88 @@ forgotten.
 
 ---
 
-## 4. THE ENGINE FILES THE DERIVATIONS CALL
+## 4. THE ENGINE MODULES THE FREEZE RUN EXECUTES
 
-**LISTED WITHOUT HASHES, BECAUSE THEY ARE READ-ONLY DEPENDENCIES RATHER THAN
-ARTIFACTS THIS CHAIN PRODUCES**, and because every recent step asserts they are
-unmodified via `git status` rather than by hash.
+> ### **HASHED FROM `docs/design/04_3b_record_reconciliation.md` §6.3. THEY WERE
+> ### PREVIOUSLY LISTED WITHOUT HASHES AND THE GROUND FOR THAT NO LONGER HOLDS.**
 
-- **`src/engine/costs.py`** — the cost algebra. Line 171 the haircut; line 71
-  the entry slippage, frozen at zero; path one's denominator assembled further
-  down the same module. **`stop_geometry` NO LONGER APPLIES A STOP CAP** —
-  `docs/design/04_1g_cap_adoption.md` §0 implemented at this commit — and the
-  line references above the change point moved; `git log -p` over the path is
-  authoritative.
-- **`src/engine/sizing.py`** — exchange-real sizing. Line 252
-  `per_unit_denominator` recovers path one's denominator from the engine.
-- **`src/engine/portfolio.py`** — the execution path. Lines 316 to 317 assemble
-  path two's denominator; line 205 `funding_per_unit`; line 694 the
-  holdout-boundary exclusion, which runs before the grid at line 718 and before
-  the only 1m request at line 733. **The line references moved at the commit
-  implementing `docs/design/04_2c_run_structure.md` §4.4; they previously read
-  298 to 299 and 187.**
-- **`src/risk/exit_spec.py`** — the E-series constants. Line 101 the settlement
-  count; line 115 the funding rate.
+**THE SUPERSEDED GROUND**, kept so the change is visible: they were "read-only
+dependencies rather than artifacts this chain produces", and "every recent step
+asserts they are unmodified via `git status` rather than by hash". **Two of them
+have since been modified** — `src/engine/costs.py` at `3e35ba5` and
+`src/engine/portfolio.py` at `1064028` — **and `git status` asserts that a file
+matches `HEAD`, which is a different claim from the one an index makes.**
+`04_3b` §6.1 gives the argument.
+
+**`src/engine/costs.py`**
+`b81dd4b76c3bda2de1adf8523ca235c3ca4c28717746681e5603df82b062e89f` — last
+modified `3e35ba5`. The cost algebra. **`stop_geometry` NO LONGER APPLIES A STOP
+CAP**, `docs/design/04_1g_cap_adoption.md` §0 implemented there. Line references
+in earlier documents moved at that commit; `git log -p` over the path is
+authoritative.
+
+**`src/engine/sizing.py`**
+`db4d3beba29a7f66bbf1367273c75bf091dda6fcadeda78e4f3d3fe01d7ed81d` — last
+modified `df14a68`. Exchange-real sizing; `per_unit_denominator` recovers path
+one's denominator from the engine.
+
+**`src/engine/portfolio.py`**
+`b43c5ae9767b1a9b4dd0e7056437aa14b2aced9e196c956e4a343a2da2924a3c` — last
+modified `1064028`. The execution path; path two's denominator; the
+holdout-boundary exclusion, which runs before the grid and before the only 1m
+request. **`docs/handoff/31_point_5_closing.md` line 78 records this file's hash
+at `1e66c17` and that record is a fact about the file then**, not a claim about
+it now.
+
+**`src/engine/simulate.py`**
+`3cb2255860be47d0222c0f0e2dc8d5cd31f3ee87c950e8b90f09beb079feb501` — last
+modified `3e35ba5`. **ADDED TO THIS SECTION BY `04_3b` §6.2.** No derivation
+calls it, so it fell outside this section's former title — **but it is the module
+freeze precondition 3 turned on**, and it is executed by the full evaluation run.
+
+**`src/risk/exit_spec.py`**
+`33f2f713740fbc47a5f1caeb1e97b474be7839a1b9077753e7243f901b18091b` — last
+modified `0f79311`. The E-series constants: the settlement count and the funding
+rate.
 
 ---
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 31.**
+- **Frozen specification entries listed: 32**, `docs/design/04_3b_record_reconciliation.md` added.
 - **Evidence reports listed: 23**, of which **three are step report-backs**
   rather than analysis reports — `docs/handoff/42_point_4_2e_report_back.md`,
   `docs/handoff/43_point_4_stop_cap_implementation.md` and
   `docs/handoff/44_point_4_3a_report_back.md`, written under
   `docs/design/04_2e_housekeeping.md` §5.2. **Both genres share one numeric
   sequence and each document declares which it is.**
+- **Pre-thesis record listed: 6** — new at §2.1, added by
+  `docs/design/04_3b_record_reconciliation.md` §5.7. **Two of the six carry
+  outcome quantities and each entry says which.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
-  `src/analysis/`, with 3 more analysis modules present and omitted as unused by
-  the current chain.
-- **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 66.**
+  `src/analysis/`. **SIX more analysis modules are present and omitted as unused
+  by the current chain**, and §3 names all six.
+  **THIS FIGURE PREVIOUSLY READ 3, CONTRADICTING §3's OWN LIST AND THE TREE.**
+  Corrected in place rather than by erratum, this file being a living index and
+  not a frozen artifact, per §0. **Logged as ledger instance (54) at
+  `docs/design/04_3b_record_reconciliation.md` §9.3.**
+- **Engine modules listed WITH hashes: 5.** Previously four, without hashes.
+- **Briefings listed: 2** — new at §6. **Both are recorded as stale and neither
+  has been regenerated under `docs/design/04_3b_record_reconciliation.md` §2.3.**
+- **Total hashed entries: 80.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 52**, stated at `docs/design/04_2e_housekeeping.md` §7.3
-  and read unchanged at `docs/design/04_3a_metric_vocabulary.md` §10.1.
-- **Errata index: 12 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5,
-  **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**, and **entries 11
-  and 12 at `docs/design/04_2e_housekeeping.md` §3.1 and §4.2**. The index says
-  nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md` §5.5
-  restates the true standing and §6.3 item 8 routes it to become a standalone
-  artifact.
+- **Defect ledger: 56**, stated at
+  `docs/design/04_3b_record_reconciliation.md` §9.6 as "52 + 4 = 56", reading 52
+  from `docs/design/04_3a_metric_vocabulary.md` §10.1.
+- **Errata index: 15 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5,
+  **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**, **entries 11
+  and 12 at `docs/design/04_2e_housekeeping.md` §3.1 and §4.2**, and **entries 13,
+  14 and 15 at `docs/design/04_3b_record_reconciliation.md` §8**. The index says
+  nine in its own text and is frozen; `04_3b` §8.4 restates the true standing and
+  records that a reader who holds the index's two named targets to be exhaustive
+  will read fourteen.
+- **Open items register: 15, none with an owner**, per
+  `docs/design/04_3b_record_reconciliation.md` §7.3.
 - **Test suite: 1394 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
 
@@ -691,3 +845,56 @@ that missed it.
 **`tests/test_containment_guard.py` STILL PINS THE FOURTH READER IN ITS UNDECLARED
 LIST.** Moving it into the grandfathered set is owed to a code step and has no
 owner.
+
+---
+
+## 6. THE BRIEFINGS
+
+**A NEW SECTION, ADDED BY `docs/design/04_3b_record_reconciliation.md` §2.3 AND
+§3.2.** A briefing **creates no rule and records no measurement**; it restates,
+for a reader who lacks context, what other documents establish. It is neither
+specification nor evidence, and filing it in §1 or §2 would misrepresent both.
+
+> ### **THEY ARE REGENERATED WHOLESALE AND NEVER AMENDED**, per `04_3b` §2.3
+> ### limb one. **THEY CARRY NO MOVING FIGURE AND CITE ONE INSTEAD**, per limb
+> ### two. **AND EACH RECORDS THE COMMIT AT WHICH IT WAS LAST REGENERATED**, per
+> ### limb three, which is the row below marked LAST CURRENT AT.
+
+**NEITHER FILE HAS YET BEEN REGENERATED UNDER THAT DISCIPLINE.** Both are indexed
+here at their present content, and **both are recorded as stale, with the
+divergences enumerated at `04_3b` §2.4.** The regeneration of each is an open
+register item at `04_3b` §7.2 with no owner.
+
+**`docs/prompts/STANDING_RULES.md`**
+`da63e28104e41890dfea438b95f98ca67e4972034e4cbc8505e894c0a0077873` — commit
+`c6b71c5`, 2026-08-16. 619 lines. **LAST CURRENT AT `c6b71c5`.**
+A transcription of rules committed elsewhere. **STALE IN SIX RESPECTS**, all
+enumerated at `docs/design/04_3b_record_reconciliation.md` §2.4: the defect-ledger
+total, the errata index count, both limbs of the banned-name divergence, the
+practices its §12 calls uncommitted, the two items its §11.2 calls still owed, and
+its §0.1's claim about this file — **which alone was false when written and is
+errata entry 13.**
+**ITS §12.7 IS FALSIFIED BY A DOCUMENT COMMITTED TWENTY MINUTES AFTER IT.**
+**A READER SHOULD TAKE EVERY RULE FROM ITS SOURCE AND NO FIGURE FROM THIS FILE.**
+
+**`docs/prompts/ORIENTATION.md`**
+`7d0e5503f6461ca5eba426465653f1a92dc5b7eeb30a7ec716e1c15913db194e` — introduced
+`2a04e37`, 2026-08-17; last modified `eee1e18`. 1,345 lines.
+**LAST CURRENT AT `eee1e18`, WHICH IS FIFTEEN COMMITS BEHIND `HEAD`.**
+The whole project for a reader who has none of it. **Its §8 describes the live
+work as sub-point 4.1c and its §15 states a defect-ledger total, an errata count,
+a test count and a commit count, all four of which have moved.**
+
+> ### **IT WAS OUTSIDE THIS INDEX FOR EIGHTEEN COMMITS.** It was introduced at
+> ### `2a04e37` in breach of the single-file rule and without the pre-existence
+> ### check, both logged at `docs/design/04_3b_record_reconciliation.md` §3.1,
+> ### and the manifest entry its own commit owed was never written. **This entry
+> ### is that entry, eighteen commits late.**
+
+**WHAT IT IS STILL GOOD FOR, RECORDED SO THE STALENESS IS NOT READ AS A REASON TO
+DELETE IT.** Its §2 carries **both holdout disclosures in full and not by
+reference**, attached to its §15 assertion that the seal is intact, which is what
+`docs/design/04_0_divergence_disposition_amendment_1.md` §3 and
+`docs/design/04_0_divergence_disposition_amendment_2.md` §3 require of exactly
+that assertion. **Its §0.1 declares six permitted banned-token places and all
+fifteen token-carrying lines fall inside those six**, verified line by line.
