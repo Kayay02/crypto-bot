@@ -72,12 +72,25 @@ SWEEP_MODULES = (os.path.join("src", "sweep", "grid.py"),
                  os.path.join("src", "sweep", "sweep.py"),
                  os.path.join("src", "sweep", "sweep_report.py"))
 
-#: SECTION 3.3's CLOSED SET, CLASS TWO -- the three test modules, recorded there
-#: as a closed set, with whether they should continue reading these artifacts
-#: named as owed.
+#: SECTION 3.3's CLOSED SET, CLASS TWO -- FOUR test modules, with whether they
+#: should continue reading these artifacts named as owed.
+#:
+#: `docs/design/04_2a_artifact_containment.md` section 3.3 recorded THREE, built
+#: on `docs/handoff/41_point_4_2_artifact_audit.md` section 4.1's enumeration,
+#: which missed a reader.
+#:
+#:     `docs/design/04_2e_housekeeping.md` SECTION 2.2 IS THE AMENDMENT THAT
+#:     ADMITTED THE FOURTH. It states: "CLASS TWO OF SECTION 3.3 IS FOUR TEST
+#:     MODULES, NOT THREE ... AND `tests/test_sweep_bands.py`."
+#:
+#: `tests/test_sweep_bands.py` MOVED HERE FROM `UNDECLARED_READERS` under that
+#: document's section 2.6, which names the move as owed to a code step and
+#: requires the exactness assertion below to be kept. THE SET REMAINS CLOSED ON
+#: THE SAME TERMS: no fifth module joins without amending section 2.2.
 GRANDFATHERED_TESTS = (os.path.join("tests", "test_sweep_prescreen.py"),
                        os.path.join("tests", "test_sweep_run.py"),
-                       os.path.join("tests", "test_dispersion.py"))
+                       os.path.join("tests", "test_dispersion.py"),
+                       os.path.join("tests", "test_sweep_bands.py"))
 
 #: THE PRODUCERS, AND THEIR STATUS IS RECORDED RATHER THAN DECIDED. Each of these
 #: opens its own output for WRITING and never reads it back. Section 3.3
@@ -99,29 +112,27 @@ CARVE_OUT_READERS = (os.path.join("tests", "test_regression_pinned_trade.py"),
 GUARDS = (os.path.join("tests", "test_containment_guard.py"),
           os.path.join("tests", "test_artifact_containment.py"))
 
-#: A READER THE CLOSED SET OMITS. FOUND BY THIS GUARD, REPORTED, NOT DECIDED.
+#: UNDECLARED READERS. THE LIST IS NOW EMPTY, AND THE ASSERTION OVER IT IS NOT.
 #:
-#: `docs/handoff/41_point_4_2_artifact_audit.md` section 4.1 records
+#: THE HISTORY, KEPT BECAUSE THE EMPTY TUPLE DOES NOT EXPLAIN ITSELF.
+#: `docs/handoff/41_point_4_2_artifact_audit.md` section 4.1 recorded
 #: "`bands.json` -- written by `src/sweep/bands.py`; NO READER FOUND", and
-#: `docs/design/04_2a_artifact_containment.md` section 3.3 builds its closed set
-#: of THREE test modules on that enumeration. `tests/test_sweep_bands.py` reads
-#: `bands.json` on every suite invocation. THE ENUMERATION MISSED IT.
+#: `docs/design/04_2a_artifact_containment.md` section 3.3 built a closed set of
+#: THREE test modules on that enumeration. `tests/test_sweep_bands.py` read a
+#: prohibited artifact on every suite invocation. THIS GUARD FOUND IT, and pinned
+#: it here rather than adding it to the closed set, because section 3.3 requires
+#: an amendment and editing a tuple in a test is not amending a document.
 #:
-#: IT IS NOT ADDED TO THE CLOSED SET HERE. Section 3.3 states that no new reader
-#: joins either class without amending that document, and editing a tuple in a
-#: test is not amending it. It is pinned separately instead, so that:
+#:     `docs/design/04_2e_housekeeping.md` SECTION 2.2 IS THAT AMENDMENT, AND
+#:     SECTION 2.6 DIRECTS THE MOVE. The gap this list existed to keep visible is
+#:     closed by a document, which is the only way it was ever going to close.
 #:
-#:   * the existing reader is not broken, which the containment step is
-#:     explicitly forbidden from doing;
-#:   * no FURTHER undeclared reader can appear without failing the guard,
-#:     because this list is asserted as exact;
-#:   * the gap stays visible until section 3.3 is amended or the reader is
-#:     removed.
-#:
-#: IT ALSO ENLARGES SECTION 7 ITEM 5 -- "the three test modules at section 3.3",
-#: whether they should keep reading outcome-bearing artifacts on every
-#: invocation. THERE ARE FOUR.
-UNDECLARED_READERS = (os.path.join("tests", "test_sweep_bands.py"),)
+#: THE EXACTNESS ASSERTION IS KEPT, AND KEEPING IT IS THE WHOLE POINT OF LEAVING
+#: THE LIST IN PLACE RATHER THAN DELETING IT. An empty tuple asserted as EXACT
+#: says that no undeclared reader exists at all, so a FIFTH reader appearing
+#: anywhere under `src/` or `tests/` still fails the guard, exactly as a second
+#: one would have before the move. A deleted list would have asserted nothing.
+UNDECLARED_READERS = ()
 
 #: Trees walked. `data/` is never walked and no artifact directory is listed.
 SEARCHED = ("src", "tests")
@@ -252,21 +263,27 @@ def test_NOTHING_outside_the_closed_set_names_a_prohibited_artifact():
 
 
 def test_the_UNDECLARED_readers_are_exactly_the_ones_the_audit_missed():
-    """THE FINDING THIS GUARD PRODUCED, PINNED SO IT CANNOT GROW SILENTLY.
+    """THE FINDING THIS GUARD PRODUCED. THE LIST IS NOW EMPTY AND STILL ASSERTED.
 
-    `docs/handoff/41_point_4_2_artifact_audit.md` section 4.1 records that
-    `bands.json` has NO READER, and section 3.3's closed set of three test
-    modules rests on that enumeration. `tests/test_sweep_bands.py` reads it on
-    every suite invocation.
+    `docs/handoff/41_point_4_2_artifact_audit.md` section 4.1 recorded that
+    `bands.json` has NO READER, and `docs/design/04_2a_artifact_containment.md`
+    section 3.3's closed set of three test modules rested on that enumeration.
+    `tests/test_sweep_bands.py` read a prohibited artifact on every suite
+    invocation, and this guard found it.
 
-        THE ENUMERATION MISSED A READER, AND THE CLOSED SET IS THEREFORE
-        INCOMPLETE AS COMMITTED.
+        `docs/design/04_2e_housekeeping.md` SECTION 2.2 AMENDED THE CLOSED SET TO
+        FOUR, AND SECTION 2.6 DIRECTED THE MOVE. THE READER IS NOW
+        GRANDFATHERED AND `UNDECLARED_READERS` IS EMPTY.
 
-    THIS DOES NOT DECIDE WHAT FOLLOWS. It is not added to the closed set --
-    section 3.3 requires an amendment for that and a tuple in a test is not one
-    -- and it is not broken, which the containment step is forbidden from doing.
-    It is pinned as EXACTLY ONE module so that a second undeclared reader fails
-    the guard above, and so the gap stays visible.
+    THE NAME OF THIS TEST IS DELIBERATELY UNCHANGED. It is the identity under
+    which the finding was pinned, and a reader following the trail from that
+    document to this module should land on it rather than on a renamed test with
+    no history.
+
+    WHAT IT ASSERTS NOW IS STRICTLY STRONGER THAN WHAT IT ASSERTED BEFORE: that
+    the set of modules reaching a prohibited artifact and not named in a
+    committed document is EMPTY. A fifth reader appearing anywhere under `src/`
+    or `tests/` fails here, which is what section 2.6 requires be kept.
     """
     for relative in UNDECLARED_READERS:
         path = os.path.join(ROOT, relative)

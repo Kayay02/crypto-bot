@@ -69,18 +69,27 @@ INHERITED.**
 other than this manifest was extracted and compared against a hash of every file
 in the tree outside `.git/` and `.venv/`.**
 
-- **51 occurrences, of which 44 resolve to a file in the tree and match it
-  exactly, and 7 do not.**
-- **38 distinct strings, of which 31 resolve and 7 do not.**
+- **56 occurrences, of which 48 resolve to a file in the tree and match it
+  exactly, and 8 do not.**
+- **40 distinct strings, of which 33 resolve and 7 do not.**
 
-**THE SEVEN THAT DO NOT RESOLVE, EACH ACCOUNTED FOR AND NONE LEFT OVER:**
+**THE OCCURRENCE AND DISTINCT UNRESOLVED COUNTS DIFFER BY ONE, AND THE REASON IS
+STATED SO THE NEXT RE-RUN IS NOT PUZZLED BY IT:**
+`docs/design/04_3b_record_reconciliation.md` and
+`docs/handoff/45_point_4_3b_report_back.md` **record the same manifest-at-entry
+hash**, both having verified this file at `ef67cc5`. **Eight occurrences, seven
+distinct strings.**
 
-- **SIX MANIFEST-AT-ENTRY CITATIONS** -- in
+**THE EIGHT OCCURRENCES THAT DO NOT RESOLVE, EACH ACCOUNTED FOR AND NONE LEFT
+OVER:**
+
+- **SEVEN MANIFEST-AT-ENTRY CITATIONS** -- in
   `docs/design/04_2c_run_structure.md`, `docs/design/04_2d_aggregation.md`,
   `docs/design/04_3b_record_reconciliation.md`,
   `docs/handoff/42_point_4_2e_report_back.md`,
-  `docs/handoff/43_point_4_stop_cap_implementation.md` and
-  `docs/handoff/44_point_4_3a_report_back.md`. Each records the hash this file
+  `docs/handoff/43_point_4_stop_cap_implementation.md`,
+  `docs/handoff/44_point_4_3a_report_back.md` and
+  `docs/handoff/45_point_4_3b_report_back.md`. Each records the hash this file
   carried when that document verified it, and **each is superseded the moment
   this file is next revised.**
 - **ONE RECORDED MODULE HASH** -- `docs/handoff/31_point_5_closing.md` line 78
@@ -497,6 +506,20 @@ against §8.2's split, the geometry decision and what survives R-normalisation,
 addition. **§12.1 records one requirement-against-constraint: the register
 assigns §9(b) to 4.3 and the direction assigns membership to 4.4.**
 
+**`docs/handoff/45_point_4_3b_report_back.md`**
+`df1464486feae2e579d39e154e7146e6187c28a23418aa2dfdc8706aeb9ed83b` — **introduced by the same commit as this
+manifest revision**. **A STEP REPORT-BACK**, the fourth under
+`docs/design/04_2e_housekeeping.md` §5.2, and the first to report a step spanning
+two commits. Reports sub-point 4.3b and the guard fix: the manifest verified at
+66 of 66 on entry, the five wrong claims in the commissioning instruction, the
+briefing form decided and the six corrections, the two breaches at `2a04e37`, the
+five counts, the NO BREACH verdict limb by limb, the engine hashing, the register
+at fifteen, and the guard's two negative controls with the failure messages.
+**§12.1 records two requirements contradicting constraints, the first being that
+the instruction's commit constraints and §5.2 cannot hold together.**
+
+---
+
 ### 2.1 THE PRE-THESIS RECORD — THE SUPERSEDED THESIS'S DOCUMENTS
 
 **ADDED BY `docs/design/04_3b_record_reconciliation.md` §5.7.** These six were
@@ -686,10 +709,11 @@ rate.
 ## 5. STATUS AT THIS COMMIT
 
 - **Frozen specification entries listed: 32**, `docs/design/04_3b_record_reconciliation.md` added.
-- **Evidence reports listed: 23**, of which **three are step report-backs**
+- **Evidence reports listed: 24**, of which **four are step report-backs**
   rather than analysis reports — `docs/handoff/42_point_4_2e_report_back.md`,
   `docs/handoff/43_point_4_stop_cap_implementation.md` and
-  `docs/handoff/44_point_4_3a_report_back.md`, written under
+  `docs/handoff/44_point_4_3a_report_back.md` and
+  `docs/handoff/45_point_4_3b_report_back.md`, written under
   `docs/design/04_2e_housekeeping.md` §5.2. **Both genres share one numeric
   sequence and each document declares which it is.**
 - **Pre-thesis record listed: 6** — new at §2.1, added by
@@ -705,7 +729,7 @@ rate.
 - **Engine modules listed WITH hashes: 5.** Previously four, without hashes.
 - **Briefings listed: 2** — new at §6. **Both are recorded as stale and neither
   has been regenerated under `docs/design/04_3b_record_reconciliation.md` §2.3.**
-- **Total hashed entries: 80.**
+- **Total hashed entries: 81.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 56**, stated at
   `docs/design/04_3b_record_reconciliation.md` §9.6 as "52 + 4 = 56", reading 52
@@ -842,9 +866,17 @@ that missed it.
 > ### writes no file and no document cites it — and **a rule broken without
 > ### consequence is still a rule broken.**
 
-**`tests/test_containment_guard.py` STILL PINS THE FOURTH READER IN ITS UNDECLARED
-LIST.** Moving it into the grandfathered set is owed to a code step and has no
-owner.
+> ### **THAT IS DONE. `tests/test_containment_guard.py` NOW CARRIES FOUR MODULES
+> ### IN `GRANDFATHERED_TESTS`**, citing `docs/design/04_2e_housekeeping.md` §2.2
+> ### as the amendment that admitted the fourth and §2.6 as the section directing
+> ### the move.
+
+**`UNDECLARED_READERS` IS LEFT IN PLACE AS AN EMPTY TUPLE RATHER THAN DELETED**,
+because §2.6 requires the exactness assertion be kept. **An empty tuple asserted as
+exact says no undeclared reader exists at all**, so a fifth reader anywhere under
+`src/` or `tests/` still fails the guard. **Verified by two negative controls,
+recorded at `docs/handoff/45_point_4_3b_report_back.md` §10 with their failure
+messages.**
 
 ---
 
