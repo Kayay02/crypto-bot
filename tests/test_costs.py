@@ -32,31 +32,60 @@ def test_tick_rounding_rejects_bad_tick():
         costs.round_to_tick(100.0, 0.0)
 
 
-def test_stop_distance_floor_and_cap(cfg):
+#: WHAT THE RETIRED CAP WOULD HAVE PRODUCED at ATR=50 on a 100.0 entry with
+#: `stop_max_pct` = 0.035: a stop at 96.5, three and a half per cent wide.
+#: KEPT AS THE NAMED COMPARISON RATHER THAN EDITED AWAY, so the difference the
+#: adoption makes is visible in this file and not only in a commit message.
+STOP_UNDER_THE_RETIRED_CAP = 96.5
+
+#: WHAT THE ADOPTED RULE PRODUCES on the same inputs: 1.5 x 50 = 75.0 of
+#: distance, so a stop at 25.0. `docs/design/04_1g_cap_adoption.md` §0.
+STOP_UNDER_NO_CAP = 25.0
+
+
+def test_stop_distance_floor_and_NO_cap(cfg):
     """UPDATED at 3R: the floor is DERIVED per symbol, no longer a flat 1.0%.
+    UPDATED AGAIN AT 4.1g: THERE IS NO CAP.
 
     ETHUSDT floor = 6 * (0.12% + 5bps) = 1.020% of entry.
+
+    `docs/design/04_1g_cap_adoption.md` §0 adopts candidate B: the stop is the
+    ATR rule floored at the cost floor, WITH NO UPPER BOUND. This test asserted
+    the cap until that adoption was implemented; the figure it asserted is kept
+    above as the named comparison rather than replaced, because a literal edited
+    to make a test green records nothing about what changed.
     """
     floor_pct = cfg.stop_min_pct("ETHUSDT")
     assert floor_pct == pytest.approx(0.01020)
-    # ATR tiny -> floored at the derived floor.
+    # ATR tiny -> floored at the derived floor. UNCHANGED by the adoption.
     s = costs.stop_price(100.0, 0.01, LONG, cfg, TICK, "ETHUSDT")
     assert s == pytest.approx(100.0 - 100.0 * floor_pct, abs=TICK)
-    # ATR huge -> capped at 3.5% of entry.
+    # ATR huge -> NOT capped. The full 1.5 x ATR distance survives.
     s = costs.stop_price(100.0, 50.0, LONG, cfg, TICK, "ETHUSDT")
-    assert s == pytest.approx(96.5)
-    # In between -> 1.5 * ATR.
+    assert s == pytest.approx(STOP_UNDER_NO_CAP)
+    assert s != pytest.approx(STOP_UNDER_THE_RETIRED_CAP), (
+        "the retired cap is being applied again")
+    assert 100.0 - s == pytest.approx(cfg.stop_atr_mult * 50.0)
+    # In between -> 1.5 * ATR. UNCHANGED by the adoption.
     s = costs.stop_price(100.0, 2.0, LONG, cfg, TICK, "ETHUSDT")
     assert s == pytest.approx(97.0)
 
 
 def test_stop_binding_mechanism_is_reported(cfg):
-    """A7 provenance counter: which of atr / floor / cap set the stop."""
+    """A7 provenance counter: which of atr / floor set the stop.
+
+    THE THIRD LABEL IS NOW UNREACHABLE. `docs/design/04_1g_cap_adoption.md` §0
+    removes the cap, so no input returns it; §4.4 of that document keeps the
+    reject-over-clip rule alive but inoperative, which is why the label itself
+    is not deleted. The ATR=50 case below is the one that used to report it.
+    """
     assert costs.stop_geometry(100.0, 0.01, LONG, cfg, TICK, "ETHUSDT")[1] == "floor"
-    assert costs.stop_geometry(100.0, 50.0, LONG, cfg, TICK, "ETHUSDT")[1] == "cap"
+    assert costs.stop_geometry(100.0, 50.0, LONG, cfg, TICK, "ETHUSDT")[1] == "atr"
     assert costs.stop_geometry(100.0, 2.0, LONG, cfg, TICK, "ETHUSDT")[1] == "atr"
     # Short side classifies identically -- the band is on distance, not side.
     assert costs.stop_geometry(100.0, 0.01, SHORT, cfg, TICK, "ETHUSDT")[1] == "floor"
+    # AND THE LABEL SURVIVES AS A NAME, unreachable rather than removed.
+    assert costs.CAP == "cap"
 
 
 def test_derived_floor_matches_hand_arithmetic_for_both_cost_structures(cfg):

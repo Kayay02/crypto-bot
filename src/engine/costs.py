@@ -233,22 +233,53 @@ def round_to_tick(price, tick, mode="nearest"):
 
 
 ATR, FLOOR, CAP = "atr", "floor", "cap"
+"""The three mechanisms that can set a stop. CAP IS UNREACHABLE AND IS KEPT.
+
+`docs/design/04_1g_cap_adoption.md` §0 adopts candidate B -- there is no stop
+cap -- so nothing below ever returns CAP. The name survives rather than being
+deleted, on two grounds that documents state:
+
+  * §4.4 of that document: the reject-over-clip rule for the two cap-relative
+    rejection populations "IS NOT REPEALED AND IS NOT WRONG. It is inoperative
+    while no cap exists, and it would govern again the moment one did", and is
+    recorded so that a later step reintroducing a cap does not re-derive it.
+    The label it would classify with is kept for the same reason.
+  * The counters over this vocabulary at `simulate.py` report the cap branch as
+    ZERO rather than omitting it, which is the treatment
+    `docs/design/06a_exit_resolution_spec_amendment_1.md` §5.3 requires of a
+    zero-valued branch: a count that appears only when non-zero tells a reader
+    nothing when it is absent.
+"""
 
 
 def stop_geometry(entry, atr, direction, cfg, tick, symbol):
-    """Stop price and which mechanism set it.
+    """Stop price and which mechanism set it. NO UPPER BOUND.
 
-    Returns (stop_price, mechanism) with mechanism in {atr, floor, cap}. The
-    mechanism is decided on the RAW distance before rounding, so a tick-level
-    rounding artifact cannot relabel an ATR stop as a floor stop.
+    THE RULE: `stop_atr_mult * ATR`, floored at the DERIVED per-symbol cost
+    floor, and NOT capped. `docs/design/04_1g_cap_adoption.md` §0:
+
+        CANDIDATE B IS ADOPTED. THERE IS NO STOP CAP. THE STOP IS THE ATR RULE
+        FLOORED AT THE COST FLOOR, WITH NO UPPER BOUND.
+
+    Returns (stop_price, mechanism) with mechanism in {atr, floor}. CAP is no
+    longer reachable; see the constant's own note.
+
+    THE MECHANISM IS DECIDED ON THE RAW DISTANCE BEFORE ROUNDING, so a
+    tick-level rounding artifact cannot relabel an ATR stop as a floor stop.
+
+    `cfg.stop_max_pct` IS NOT READ HERE AND THE PARAMETER IS NOT REMOVED.
+    `docs/design/04_1g_cap_adoption.md` §5 records that it remains a required
+    `CostConfig` parameter, read by the analysis modules that compute the
+    admitted domain and set by the sweep, which derives a cap per fold for its
+    own grid and whose disposition that section expressly leaves open. **A
+    parameter that survives for a live consumer is not a divergence; a
+    parameter applied on the stop rule is, and that application is what is
+    removed here.**
     """
     raw = cfg.stop_atr_mult * atr
     lo = cfg.stop_min_pct(symbol) * entry
-    hi = cfg.stop_max_pct * entry
     if raw < lo:
         dist, mech = lo, FLOOR
-    elif raw > hi:
-        dist, mech = hi, CAP
     else:
         dist, mech = raw, ATR
     price = entry - dist if direction == LONG else entry + dist
@@ -257,7 +288,7 @@ def stop_geometry(entry, atr, direction, cfg, tick, symbol):
 
 
 def stop_price(entry, atr, direction, cfg, tick, symbol):
-    """stop_atr_mult * ATR, floored at the DERIVED floor, capped at the cap."""
+    """stop_atr_mult * ATR, floored at the DERIVED floor. NOT capped."""
     return stop_geometry(entry, atr, direction, cfg, tick, symbol)[0]
 
 

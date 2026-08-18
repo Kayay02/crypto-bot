@@ -180,18 +180,28 @@ def simulate_trade(signal, bars_1m, cfg, tick, trace=None, order_spec=None):
     raw_dist = cfg.stop_atr_mult * atr
     floor_pct = cfg.stop_min_pct(symbol)
     pct = abs(entry - stop) / entry
+    # NO CAP IS NAMED HERE, because none is applied.
+    # `docs/design/04_1g_cap_adoption.md` §0 adopts candidate B. A trace line
+    # that reported a cap the geometry does not apply would be the same
+    # divergence in the human-readable channel.
     tr(f"  STOP    atr={_fmt(atr)} x{cfg.stop_atr_mult} = {_fmt(raw_dist)}  "
        f"floor {floor_pct:.4%} (DERIVED: max({cfg.n_cost} x c_roundtrip "
        f"{cfg.c_roundtrip(symbol):.4%}, lev {cfg.leverage_term():.4%})) "
-       f"cap {cfg.stop_max_pct:.3%} of "
+       f"no upper bound, of "
        f"{_fmt(entry)} -> stop {_fmt(stop)} ({pct:.4%} of entry) "
        f"[stop_binding_mechanism={stop_mech}]")
 
     qty = position_size(entry, stop, direction, cfg, symbol)
 
     # Exchange minimum-order guard rail, denominated in QUANTITY and NOTIONAL
-    # (never percent -- stop_max_pct already guards width in percent). Reject
-    # loudly rather than let a sub-minimum order round silently to nothing.
+    # and never in percent. It used to be justified by `stop_max_pct` already
+    # guarding width in percent; under `docs/design/04_1g_cap_adoption.md` §0
+    # nothing guards width at all, and this guard rail is now the only refusal
+    # a wide stop can meet -- which is why §6 of that document makes the count
+    # of refusals for quantity or notional the adoption's own falsifier, to be
+    # reported wherever the engine runs under this rule including when zero.
+    # Reject loudly rather than let a sub-minimum order round silently to
+    # nothing.
     ok, why = check_min_qty(qty, entry, order_spec)
     if not ok:
         tr(f"  REFUSED min_qty: {why}")

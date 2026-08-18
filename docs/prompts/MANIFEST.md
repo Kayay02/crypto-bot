@@ -404,6 +404,17 @@ declared as such in its own §0, filed here rather than under `docs/design/`
 because it is evidence and not specification. Its commit hash is not in it and
 cannot be; the chat channel carries that.
 
+**`docs/handoff/43_point_4_stop_cap_implementation.md`**
+`400889b0cdf92cbccc23df850a7e5581e42eeba15503fe17a23d7b1e9ab21543` — **introduced by the same commit as this
+manifest revision**. **A STEP REPORT-BACK**, the second under
+`docs/design/04_2e_housekeeping.md` §5.2. Records the stop cap's removal from
+`src/engine/costs.py`: every reader of `stop_max_pct` and `stop_geometry`
+enumerated over AST nodes and classified in five classes, the caller set found
+narrower than `04_1g` §4.1 states, the negative control that failed 10 of 16
+tests, the two `tests/test_costs.py` results that changed and how they were
+handled, and freeze precondition 3 reported as **closed as to every named
+divergence** rather than as satisfied.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
@@ -483,8 +494,12 @@ forgotten.
 ARTIFACTS THIS CHAIN PRODUCES**, and because every recent step asserts they are
 unmodified via `git status` rather than by hash.
 
-- **`src/engine/costs.py`** — the cost algebra. Line 336 assembles path one's
-  denominator; line 171 the haircut; line 71 the entry slippage, frozen at zero.
+- **`src/engine/costs.py`** — the cost algebra. Line 171 the haircut; line 71
+  the entry slippage, frozen at zero; path one's denominator assembled further
+  down the same module. **`stop_geometry` NO LONGER APPLIES A STOP CAP** —
+  `docs/design/04_1g_cap_adoption.md` §0 implemented at this commit — and the
+  line references above the change point moved; `git log -p` over the path is
+  authoritative.
 - **`src/engine/sizing.py`** — exchange-real sizing. Line 252
   `per_unit_denominator` recovers path one's denominator from the engine.
 - **`src/engine/portfolio.py`** — the execution path. Lines 316 to 317 assemble
@@ -501,15 +516,16 @@ unmodified via `git status` rather than by hash.
 ## 5. STATUS AT THIS COMMIT
 
 - **Frozen specification entries listed: 30.**
-- **Evidence reports listed: 21**, of which **one is a step report-back** rather
-  than an analysis report — `docs/handoff/42_point_4_2e_report_back.md`, the first
-  written under `docs/design/04_2e_housekeeping.md` §5.2. **Both genres share one
-  numeric sequence and each document declares which it is.**
+- **Evidence reports listed: 22**, of which **two are step report-backs** rather
+  than analysis reports — `docs/handoff/42_point_4_2e_report_back.md` and
+  `docs/handoff/43_point_4_stop_cap_implementation.md`, written under
+  `docs/design/04_2e_housekeeping.md` §5.2. **Both genres share one numeric
+  sequence and each document declares which it is.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 63.**
+- **Total hashed entries: 64.**
 - **Hash mismatches against values recorded in committed documents: zero.**
 - **Defect ledger: 52**, stated at `docs/design/04_2e_housekeeping.md` §7.3.
 - **Errata index: 12 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5,
@@ -518,7 +534,7 @@ unmodified via `git status` rather than by hash.
   nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md` §5.5
   restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
-- **Test suite: 1378 passing.**
+- **Test suite: 1394 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
 
 ### 5.1 THE HOLDOUT-BOUNDARY EXCLUSION, RECORDED HERE BECAUSE IT MOVED A FIGURE
