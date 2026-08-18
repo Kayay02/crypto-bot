@@ -287,6 +287,24 @@ question to its own document. §6 restates the clean-clone objective in four
 evaluable parts and records that it is not met. §7 logs **ledger 52** and lists
 ten open items. Commits no metric, no level and no disposition of the cap.
 
+**`docs/design/04_3a_metric_vocabulary.md`**
+`996fc3fa3f6c7cb171dcb3d4f857ed95abe090c5fe0a82ea6430749dc75b29fc` — **introduced by the same commit as this
+manifest revision**. Sub-point 4.3, first part. **THE METRIC VOCABULARY.** §2
+commits the default NOT to compute -- a quantity is produced only if a committed
+decision consumes it or it verifies the specification -- against the impression
+channel `docs/handoff/41_point_4_2_artifact_audit.md` §5 records as unclosable,
+and is the first document in the chain to face that hazard. §3 commits two tiers
+with a **checkable** property: a diagnostic is an input to no condition,
+threshold or gate, so the tier is a fact about the decision graph rather than
+about intent; §3.5 admits outcome-bearing diagnostics only as a count of
+violations or a maximum absolute deviation. §4 commits five levels with the run
+level as the default and sorts metric classes by whether they decompose. §5
+commits a two-limb denominator rule at every level and in both tiers and forbids
+three path-dependent definitions. §6 discharges §5.7 whole: the per-trade R unit
+is `realised_risk_usd` and the operator is equal weighting. §7 disposes of the
+geometry heterogeneity. §8 takes §5.4's vocabulary part. **Ledger unchanged at
+52. Commits no threshold, no kill condition, and closes no membership.**
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -415,6 +433,17 @@ tests, the two `tests/test_costs.py` results that changed and how they were
 handled, and freeze precondition 3 reported as **closed as to every named
 divergence** rather than as satisfied.
 
+**`docs/handoff/44_point_4_3a_report_back.md`**
+`af3ac9a4d98135c5b5aefd26f20f200a2ffa2be01b1a72e8b007cc4bac0e4463` — **introduced by the same commit as this
+manifest revision**. **A STEP REPORT-BACK**, the third under
+`docs/design/04_2e_housekeeping.md` §5.2. Reports 4.3a: the two tiers and the
+checkable property, the outcome-quantity constraint on diagnostics, the default
+level and the non-decomposing case, the denominator rule, §5.7's discharge
+against §8.2's split, the geometry decision and what survives R-normalisation,
+§5.4's disposition, what 4.4 inherits, and the ledger read at 52 with no
+addition. **§12.1 records one requirement-against-constraint: the register
+assigns §9(b) to 4.3 and the direction assigns membership to 4.4.**
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
@@ -515,19 +544,21 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 30.**
-- **Evidence reports listed: 22**, of which **two are step report-backs** rather
-  than analysis reports — `docs/handoff/42_point_4_2e_report_back.md` and
-  `docs/handoff/43_point_4_stop_cap_implementation.md`, written under
+- **Frozen specification entries listed: 31.**
+- **Evidence reports listed: 23**, of which **three are step report-backs**
+  rather than analysis reports — `docs/handoff/42_point_4_2e_report_back.md`,
+  `docs/handoff/43_point_4_stop_cap_implementation.md` and
+  `docs/handoff/44_point_4_3a_report_back.md`, written under
   `docs/design/04_2e_housekeeping.md` §5.2. **Both genres share one numeric
   sequence and each document declares which it is.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 64.**
+- **Total hashed entries: 66.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 52**, stated at `docs/design/04_2e_housekeeping.md` §7.3.
+- **Defect ledger: 52**, stated at `docs/design/04_2e_housekeeping.md` §7.3
+  and read unchanged at `docs/design/04_3a_metric_vocabulary.md` §10.1.
 - **Errata index: 12 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5,
   **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**, and **entries 11
   and 12 at `docs/design/04_2e_housekeeping.md` §3.1 and §4.2**. The index says
