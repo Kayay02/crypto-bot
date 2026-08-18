@@ -26,24 +26,42 @@ about the file. **Recompute rather than trust.**
 **EVERY HASH BELOW WAS COMPUTED FRESH FROM THE WORKING TREE AT THIS COMMIT.** None
 was copied from any document.
 
-**THE CROSS-CHECK, AND ITS RESULT.** Every 64-character hexadecimal string
-appearing in any document under `docs/` other than this manifest was extracted and
-compared against the working tree: **42 occurrences, of which 30 resolve to a file
-in the tree and match it exactly, and 12 are not file hashes at all** — four
-payload digests in `docs/design/06_exit_resolution_spec.md`, six in
-`docs/handoff/25_point_5_2_venue_constraints.md`, and two manifest-at-entry
-citations, in `docs/design/04_2c_run_structure.md` and
-`docs/design/04_2d_aggregation.md`, each superseded by a later revision of this
-file.
+**THE CROSS-CHECK, RE-RUN AT THIS REVISION.** Every 64-character hexadecimal
+string appearing in any document under `docs/` other than this manifest was
+extracted and compared against the working tree: **44 occurrences, of which 40
+resolve to a file in the tree and match it exactly, and 4 do not.**
 
-> ### **ZERO MISMATCHES: NO STRING THAT NAMES A FILE FAILS TO MATCH IT, AND NO
-> ### NAMED FILE IS ABSENT.** No silent-edit event is detected at this commit.
+> ### **THE FIGURES ARE NOT COMPARABLE TO THE PRIOR REVISION'S 42 AND 30, AND THE
+> ### REASON IS THAT THE FILE SET DIFFERS AND NEITHER RUN STATED IT.** This run
+> ### hashed **every** file in the tree outside `.git/` and `.venv/`, so the
+> ### payload digests in `docs/design/06_exit_resolution_spec.md` and
+> ### `docs/handoff/25_point_5_2_venue_constraints.md` — ten strings the prior
+> ### revision classified as "not file hashes at all" — now resolve against the
+> ### stored response bodies under `data/reference/`. **They were always file
+> ### hashes; the earlier run simply did not hash those files.** Recorded as a
+> ### looseness in the earlier statement rather than as a correction of it, since
+> ### neither run committed a file set.
 
-**THE MATCHING FIGURE IS UNCHANGED FROM THE PRIOR REVISION'S 30**, computed under
-the same stated rule; the occurrence count rises by one because each document that
-records the manifest hash it verified on entry adds an orphan the moment this file
-is next revised. **That is expected and is not a defect** — the citation is a
-record of what was verified then, not a claim about the file now.
+**THE FOUR THAT DO NOT RESOLVE, EACH ACCOUNTED FOR:**
+
+- **three manifest-at-entry citations** — in `docs/design/04_2c_run_structure.md`,
+  `docs/design/04_2d_aggregation.md` and
+  `docs/handoff/42_point_4_2e_report_back.md`. Each records the hash this file
+  carried when that document verified it, and **each is superseded the moment this
+  file is next revised.**
+- **one recorded module hash** — `docs/handoff/31_point_5_closing.md` line 78
+  records `src/engine/portfolio.py` as it stood at commit `1e66c17`. **That file
+  was legitimately modified at commit `1064028`**, which implemented
+  `docs/design/04_2c_run_structure.md` §4.4's exclusion, so the recorded hash is a
+  record of the file then and not a claim about the file now.
+
+> ### **ZERO MISMATCHES: NO STRING THAT NAMES A FILE AS IT STANDS NOW FAILS TO
+> ### MATCH IT, AND NO NAMED FILE IS ABSENT.** No silent-edit event is detected at
+> ### this commit.
+
+**EACH DOCUMENT THAT RECORDS A HASH IT VERIFIED ON ENTRY ADDS AN ORPHAN THE MOMENT
+THE TARGET IS NEXT REVISED. That is expected and is not a defect** — the citation
+is a record of what was verified then, not a claim about the file now.
 
 ---
 
@@ -254,6 +272,21 @@ periods as independent observations is admissible. M.3's second limb adopted afr
 per partition cell per symbol, with zero-valued cells reported. Ledger 51. Commits
 no metric and no level.
 
+**`docs/design/04_2e_housekeeping.md`**
+`fb3f48c9c182640dc173b5521a484f3e3e280080eb38ae08f8f00aefeedc36e5` — **introduced by the same commit as this
+manifest revision**. Sub-point 4.2e. Closes five items left open by the
+consolidated code step. §2 amends `04_2a_artifact_containment.md` §3.3's closed
+reader set to **four** test modules after an independent AST check, and states
+that the read prohibition has been in breach on every suite invocation since it
+was committed. §3 logs **erratum 11** against report 41 §4.1 and shows its NO
+BREACH verdict robust to the omission. §4 logs **erratum 12** against
+`04_2c_run_structure.md` §4.4's column claim, leaves the committed rule
+untouched and **ratifies** `exit_close_ms >= seal`. §5 commits the report-back
+protocol, creates a **third single-file exemption**, and routes the post-freeze
+question to its own document. §6 restates the clean-clone objective in four
+evaluable parts and records that it is not met. §7 logs **ledger 52** and lists
+ten open items. Commits no metric, no level and no disposition of the cap.
+
 ---
 
 ## 2. EVIDENCE — REPORTS UNDER `docs/handoff/`
@@ -362,6 +395,15 @@ transcribed before any finding: **NO BREACH.** They carry outcome quantities,
 belong to a superseded thesis, all predate the 2026-08-11 freeze, and no chain
 reaches any Point 4 or Point 5 commitment. No file under `data/` was opened.
 
+**`docs/handoff/42_point_4_2e_report_back.md`**
+`bd34bde58f3e71b69afac5abe84985871fa2118f2aac8db39c2ac9d93f53621d` — **introduced by the same commit as this
+manifest revision**. **THE FIRST STEP REPORT-BACK**, written under the protocol
+`docs/design/04_2e_housekeeping.md` §5.2 commits and reporting the step that
+committed it. **A NEW GENRE IN THIS SEQUENCE**: a record of what a step did,
+declared as such in its own §0, filed here rather than under `docs/design/`
+because it is evidence and not specification. Its commit hash is not in it and
+cannot be; the chat channel carries that.
+
 ---
 
 ## 3. IMPLEMENTATION — MODULES LATER STEPS BUILD ON
@@ -458,19 +500,23 @@ unmodified via `git status` rather than by hash.
 
 ## 5. STATUS AT THIS COMMIT
 
-- **Frozen specification entries listed: 29.**
-- **Evidence reports listed: 20.**
+- **Frozen specification entries listed: 30.**
+- **Evidence reports listed: 21**, of which **one is a step report-back** rather
+  than an analysis report — `docs/handoff/42_point_4_2e_report_back.md`, the first
+  written under `docs/design/04_2e_housekeeping.md` §5.2. **Both genres share one
+  numeric sequence and each document declares which it is.**
 - **Implementation modules listed: 12** — `src/firewall.py` plus eleven under
   `src/analysis/`, with 3 more analysis modules present and omitted as unused by
   the current chain.
 - **Engine dependencies listed without hashes: 4.**
-- **Total hashed entries: 61.**
+- **Total hashed entries: 63.**
 - **Hash mismatches against values recorded in committed documents: zero.**
-- **Defect ledger: 51**, stated at `docs/design/04_2d_aggregation.md` §9.3.
-- **Errata index: 10 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5
-  and **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**. The index
-  says nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md`
-  §5.5 restates the true standing and §6.3 item 8 routes it to become a standalone
+- **Defect ledger: 52**, stated at `docs/design/04_2e_housekeeping.md` §7.3.
+- **Errata index: 12 entries** — nine at `docs/design/04_1c_pre_commitments.md` §5,
+  **entry 10 at `docs/design/04_1d_standing_practices.md` §4.1**, and **entries 11
+  and 12 at `docs/design/04_2e_housekeeping.md` §3.1 and §4.2**. The index says
+  nine in its own text and is frozen; `04_1c_consequences_and_thresholds.md` §5.5
+  restates the true standing and §6.3 item 8 routes it to become a standalone
   artifact.
 - **Test suite: 1378 passing.**
 - **Performance firewall: armed. Holdout: sealed and unspent.**
@@ -576,3 +622,25 @@ document settles.
 
 **AND `requirements.txt` DOES NOT LIST THE TEST RUNNER**, so "build, then run the
 suite" needs a step the file does not record. Noted, not changed.
+
+**THE OBJECTIVE IS RESTATED AT `docs/design/04_2e_housekeeping.md` §6.2** in four
+evaluable parts, after being found unachievable as written. **Run 3 above is the
+one that would constitute meeting it**, and it does not: every remaining failure
+and error is `tests/test_sweep_bands.py`.
+
+### 5.4 THE READER SET AND THE READ PROHIBITION'S STANDING
+
+**`docs/design/04_2a_artifact_containment.md` §3.3's CLOSED SET IS AMENDED TO FOUR
+TEST MODULES** by `docs/design/04_2e_housekeeping.md` §2.2, after an independent
+AST check found **six call sites and three prohibited artifacts** in
+`tests/test_sweep_bands.py`, committed 2026-08-09 — eight days before the audit
+that missed it.
+
+> ### **THE READ PROHIBITION WAS IN BREACH ON EVERY SUITE INVOCATION FROM
+> ### `3fa9d06` UNTIL THAT AMENDMENT.** The breach reached nothing — the module
+> ### writes no file and no document cites it — and **a rule broken without
+> ### consequence is still a rule broken.**
+
+**`tests/test_containment_guard.py` STILL PINS THE FOURTH READER IN ITS UNDECLARED
+LIST.** Moving it into the grandfathered set is owed to a code step and has no
+owner.
